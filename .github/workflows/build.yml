@@ -112,6 +112,12 @@ jobs:
         run: choco install wixtoolset -y --no-progress
         shell: bash
 
+      - name: Set WiX path (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          echo "TAURI_ENV_WIX_PATH=C:/Program Files (x86)/WiX Toolset v3.14" >> $GITHUB_ENV
+
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
