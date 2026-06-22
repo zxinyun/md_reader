@@ -116,7 +116,17 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          echo "TAURI_ENV_WIX_PATH=C:/Program Files (x86)/WiX Toolset v3.14" >> $GITHUB_ENV
+          WIX_DIR="/c/Program Files (x86)/WiX Toolset v3.14"
+          if [ ! -d "$WIX_DIR" ]; then
+            WIX_DIR="/c/Program Files (x86)/WiX Toolset v3.11"
+          fi
+          if [ -d "$WIX_DIR" ]; then
+            echo "Found WiX at: $WIX_DIR"
+            echo "TAURI_ENV_WIX_PATH=$WIX_DIR" >> $GITHUB_ENV
+            echo "$WIX_DIR/bin" >> $GITHUB_PATH
+          else
+            echo "WiX not found, using Tauri default"
+          fi
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
