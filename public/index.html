@@ -1968,40 +1968,49 @@ async function renderPdfWithPdfJs(buf) {
     var pageCanvases = [];
     var thumbCanvases = [];
 
-    var btnStyle = 'padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;cursor:pointer;white-space:nowrap;';
-    var sepStyle = 'width:1px;height:20px;background:var(--border);margin:0 2px;flex-shrink:0;';
+    var btnStyle = 'padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;cursor:pointer;white-space:nowrap;flex-shrink:0;';
 
     var toolbar = document.createElement('div');
-    toolbar.style.cssText = 'display:flex;align-items:center;gap:4px;padding:6px 8px;background:var(--bg-card);border-bottom:1px solid var(--border);flex-shrink:0;user-select:none;flex-wrap:wrap;';
-    toolbar.innerHTML = [
+    toolbar.style.cssText = 'flex-shrink:0;background:var(--bg-card);border-bottom:1px solid var(--border);user-select:none;';
+    var row1 = document.createElement('div');
+    row1.style.cssText = 'display:flex;align-items:center;gap:4px;padding:6px 8px;overflow-x:auto;-webkit-overflow-scrolling:touch;';
+    row1.innerHTML = [
       '<button id="pdfThumbs" title="缩略图" style="' + btnStyle + 'font-size:16px;">☰</button>',
       '<button id="pdfPrev" title="上一页" style="' + btnStyle + 'font-size:16px;">◀</button>',
-      '<input id="pdfPageInput" type="number" min="1" max="' + totalPages + '" value="1" style="width:44px;text-align:center;padding:4px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;" />',
-      '<span id="pdfPageInfo" style="font-size:13px;color:var(--text-secondary);">/' + totalPages + '</span>',
+      '<input id="pdfPageInput" type="number" min="1" max="' + totalPages + '" value="1" style="width:44px;text-align:center;padding:4px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;flex-shrink:0;" />',
+      '<span id="pdfPageInfo" style="font-size:13px;color:var(--text-secondary);flex-shrink:0;">/' + totalPages + '</span>',
       '<button id="pdfNext" title="下一页" style="' + btnStyle + 'font-size:16px;">▶</button>',
-      '<span style="' + sepStyle + '"></span>',
+      '<div style="width:1px;height:20px;background:var(--border);margin:0 2px;flex-shrink:0;"></div>',
       '<button id="pdfZoomOut" title="缩小" style="' + btnStyle + 'font-size:16px;">−</button>',
-      '<span id="pdfZoomLevel" style="font-size:12px;color:var(--text-secondary);min-width:36px;text-align:center;">100%</span>',
+      '<span id="pdfZoomLevel" style="font-size:12px;color:var(--text-secondary);min-width:36px;text-align:center;flex-shrink:0;">100%</span>',
       '<button id="pdfZoomIn" title="放大" style="' + btnStyle + 'font-size:16px;">+</button>',
       '<button id="pdfFitWidth" title="适合宽度" style="' + btnStyle + '">宽度</button>',
       '<button id="pdfFitPage" title="适合页面" style="' + btnStyle + '">页面</button>',
-      '<span style="' + sepStyle + '"></span>',
-      '<button id="pdfToolHighlight" title="高亮标注" style="' + btnStyle + 'font-size:16px;">🖍</button>',
-      '<button id="pdfToolDraw" title="自由画笔" style="' + btnStyle + 'font-size:16px;">✏</button>',
-      '<button id="pdfToolRect" title="矩形框" style="' + btnStyle + 'font-size:16px;">▭</button>',
-      '<button id="pdfToolUnderline" title="下划线" style="' + btnStyle + 'font-size:16px;">U̲</button>',
-      '<select id="pdfDrawColor" style="padding:4px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:12px;">' +
-        '<option value="#FFEB3B" style="color:#FFEB3B">黄色</option>' +
-        '<option value="#FF5722" style="color:#FF5722">红色</option>' +
-        '<option value="#4CAF50" style="color:#4CAF50">绿色</option>' +
-        '<option value="#2196F3" style="color:#2196F3">蓝色</option>' +
-        '<option value="#FF9800" style="color:#FF9800">橙色</option>' +
-      '</select>',
-      '<button id="pdfToolNote" title="添加便签" style="' + btnStyle + 'font-size:16px;">📝</button>',
-      '<button id="pdfToolEraser" title="清除当前页标注" style="' + btnStyle + 'font-size:14px;">🗑</button>',
-      '<span style="' + sepStyle + '"></span>',
+      '<div style="width:1px;height:20px;background:var(--border);margin:0 2px;flex-shrink:0;"></div>',
+      '<button id="pdfToolBtn" title="标注工具" style="' + btnStyle + 'font-size:16px;">✏️</button>',
       '<button id="pdfClose" title="关闭" style="' + btnStyle + 'font-size:14px;color:#f44336;">✕</button>'
     ].join('');
+    toolbar.appendChild(row1);
+
+    var row2 = document.createElement('div');
+    row2.id = 'pdfAnnoBar';
+    row2.style.cssText = 'display:none;align-items:center;gap:4px;padding:4px 8px 6px;border-top:1px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch;';
+    row2.innerHTML = [
+      '<button id="pdfToolHighlight" title="高亮" style="' + btnStyle + 'font-size:15px;">🖍</button>',
+      '<button id="pdfToolDraw" title="画笔" style="' + btnStyle + 'font-size:15px;">✏</button>',
+      '<button id="pdfToolRect" title="矩形" style="' + btnStyle + 'font-size:15px;">▭</button>',
+      '<button id="pdfToolUnderline" title="下划线" style="' + btnStyle + 'font-size:15px;font-weight:bold;">U̲</button>',
+      '<select id="pdfDrawColor" style="padding:4px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:12px;flex-shrink:0;">' +
+        '<option value="#FFEB3B">黄色</option>' +
+        '<option value="#FF5722">红色</option>' +
+        '<option value="#4CAF50">绿色</option>' +
+        '<option value="#2196F3">蓝色</option>' +
+        '<option value="#FF9800">橙色</option>' +
+      '</select>',
+      '<button id="pdfToolNote" title="便签" style="' + btnStyle + 'font-size:15px;">📝</button>',
+      '<button id="pdfToolEraser" title="清除标注" style="' + btnStyle + 'font-size:14px;">🗑</button>'
+    ].join('');
+    toolbar.appendChild(row2);
     wrapper.appendChild(toolbar);
 
     var body = document.createElement('div');
@@ -2242,6 +2251,13 @@ async function renderPdfWithPdfJs(buf) {
       }
       pagesContainer.style.cursor = activeTool !== 'none' ? 'crosshair' : '';
     }
+    document.getElementById('pdfToolBtn').addEventListener('click', function() {
+      var bar = document.getElementById('pdfAnnoBar');
+      var isOpen = bar.style.display !== 'none';
+      bar.style.display = isOpen ? 'none' : 'flex';
+      this.style.background = isOpen ? '' : 'var(--primary)';
+      this.style.color = isOpen ? '' : '#fff';
+    });
     document.getElementById('pdfToolHighlight').addEventListener('click', function() { setTool('highlight'); });
     document.getElementById('pdfToolDraw').addEventListener('click', function() { setTool('draw'); });
     document.getElementById('pdfToolRect').addEventListener('click', function() { setTool('rect'); });
@@ -2341,7 +2357,7 @@ async function renderPdfWithPdfJs(buf) {
     var pinchState = null;
     var pinchStartScale = currentScale;
     var pinchPending = false;
-    scrollContainer.addEventListener('touchstart', function(e) {
+    wrapper.addEventListener('touchstart', function(e) {
       if (e.touches.length === 2) {
         e.preventDefault();
         var dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -2350,7 +2366,7 @@ async function renderPdfWithPdfJs(buf) {
         pinchState = { dist: Math.sqrt(dx * dx + dy * dy) };
       }
     }, { passive: false });
-    scrollContainer.addEventListener('touchmove', function(e) {
+    wrapper.addEventListener('touchmove', function(e) {
       if (e.touches.length === 2 && pinchState) {
         e.preventDefault();
         var dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -2365,7 +2381,7 @@ async function renderPdfWithPdfJs(buf) {
         pinchPending = previewScale;
       }
     }, { passive: false });
-    scrollContainer.addEventListener('touchend', function(e) {
+    wrapper.addEventListener('touchend', function(e) {
       if (e.touches.length < 2 && pinchState) {
         pagesContainer.style.transform = '';
         if (pinchPending && Math.abs(pinchPending - currentScale) > 0.01) {
