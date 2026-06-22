@@ -356,7 +356,8 @@ zip -r ios-app.zip App.xcarchive
 11. **Shell 兼容性** — Windows runner 默认 PowerShell，含 bash 语法的步骤必须加 `shell: bash`
 12. **APK 签名** — CI 每次环境不同，debug keystore 需用 `actions/cache` 缓存保证签名一致
 13. **版本号自动化** — 从 git tag 自动提取版本号，CI 中用 Node.js 同步更新所有配置文件，避免手动改版本
-14. **NSIS 配置** — Tauri v2 内置 NSIS，无需外部安装；去掉 WiX 配置，显式声明 NSIS 选项
+14. **NSIS 配置** — Tauri v2 内置 NSIS，无需外部安装；保留 wix 配置，NSIS 和 WiX 配置互不影响
+15. **版本号格式** — 回退版本号必须符合 WiX 最严格要求（纯数字），不要用 `0.0.0-dev`，用 `0.0.0`
 
 ---
 
@@ -533,8 +534,193 @@ PDF 能显示但无法缩放、翻页，用户体验极差。
 1. **PDF** — 桌面端用 iframe + blob URL，移动端必须用 pdf.js
 2. **PDF 分辨率** — 渲染 scale 必须乘以 `devicePixelRatio`
 3. **PDF 交互** — 必须有缩放、翻页、页码显示
-4. **Word/Excel/PPT** — 桌面端用 mammoth/docx-preview/xlsx/pptxjs，移动端需验证兼容性
-5. **图片** — 各平台原生支持，但大图需要压缩处理
-6. **文件读取** — Capacitor 的 `readAsArrayBuffer` 对 `_uri` 路径支持不完整，需要特殊处理
-7. **文件选择** — Capacitor 回退到 Web `<input type="file">`，不支持目录选择
-8. **保存文件** — Capacitor 不支持原生保存对话框，需要回退到 Blob 下载
+4. **PDF 双指缩放** — 动态修改 viewport（`user-scalable=yes`）+ 手动监听 touch 事件 + CSS transform 实时预览
+5. **PDF 标注** — 双 canvas 架构（渲染层 + 标注层），标注坐标基于 canvas 内部坐标
+6. **PDF 便签** — 用 HTML div 元素（非 canvas），支持事件和 tooltip
+7. **Word/Excel/PPT** — 桌面端用 mammoth/docx-preview/xlsx/pptxjs，移动端需验证兼容性
+8. **图片** — 各平台原生支持，但大图需要压缩处理
+9. **文件读取** — Capacitor 的 `readAsArrayBuffer` 对 `_uri` 路径支持不完整，需要特殊处理
+10. **文件选择** — Capacitor 回退到 Web `<input type="file">`，不支持目录选择
+11. **保存文件** — Capacitor 不支持原生保存对话框，需要回退到 Blob 下载
+
+---
+
+## 24. WiX/MSI 版本号预发布标识必须是纯数字
+
+### 现象
+MSI 构建报错：`optional pre-release identifier in app version must be numeric-only and cannot be greater than 65535 for msi target`
+
+### Root Cause
+WiX/MSI 对版本号格式有严格要求：`主版本.次版本.修订号[.预发布]`，其中预发布标识**必须是纯数字**（且 ≤ 65535）。`0.0.0-dev` 中的 `dev` 是非数字字符串，WiX 拒绝接受。NSIS 没有这个限制。
+
+### 解决方案
+CI 中非 tag 触发时的版本回退值从 `0.0.0-dev` 改为 `0.0.0`（纯数字）：
+```yaml
+- name: Resolve version
+  shell: bash
+  run: |
+    if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.version }}" ]; then
+      echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+    elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+      echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+    else
+      echo "version=0.0.0" >> $GITHUB_OUTPUT  # 不是 0.0.0-dev！
+    fi
+```
+
+### 教训
+- WiX 版本号规则：`MAJOR.MINOR.BUILD[.PRERELEASE]`，PRERELEASE 部分只能是数字。
+- NSIS 对版本号宽容得多，所以只构建 NSIS 时不会发现这个问题。
+- 项目中所有版本号回退值都必须检查是否符合最严格的格式要求。
+
+---
+
+## 25. tauri.conf.json 中 wix 配置不能删除
+
+### 现象
+恢复了版本号后 MSI 仍然构建失败，报各种 WiX 相关错误。
+
+### Root Cause
+v1.0.6 提交时为了配置 NSIS 选项，把 `tauri.conf.json` 中的整个 `windows` 块替换成了：
+```json
+"windows": {
+  "nsis": { "displayLanguageSelector": false, "installerIcon": "icons/icon.ico" }
+}
+```
+删除了原有的 `"wix": { "language": "zh-CN" }` 配置。没有 wix 配置后，Tauri 构建 MSI 时走了不同的代码路径导致失败。
+
+### 正确写法
+NSIS 和 WiX 配置需要同时存在：
+```json
+"windows": {
+  "nsis": {
+    "displayLanguageSelector": false,
+    "installerIcon": "icons/icon.ico"
+  },
+  "wix": {
+    "language": "zh-CN"
+  }
+}
+```
+
+### 教训
+- `tauri.conf.json` 的 `bundle.windows` 下 `nsis` 和 `wix` 是独立的配置节，互不影响，不能互相替代。
+- 删除任何配置前，先确认该配置是否影响其他构建目标。
+
+---
+
+## 26. Android WebView 中 viewport meta 禁止双指缩放
+
+### 现象
+APK 中 PDF 能正常显示，但双指缩放手势无反应。
+
+### Root Cause
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+```
+`maximum-scale=1.0, user-scalable=no` 直接禁止了 WebView 中的所有缩放手势，包括双指缩放。
+
+### 解决方案
+PDF 查看器打开时**动态修改** viewport，关闭时恢复：
+```javascript
+// 保存原始值
+var origViewport = document.querySelector('meta[name="viewport"]');
+var origContent = origViewport.content;
+// PDF 查看器打开时
+origViewport.content = 'width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=5.0, user-scalable=yes';
+// PDF 查看器关闭时
+origViewport.content = origContent;
+```
+
+### 教训
+- `user-scalable=no` 在移动端 web app 中常见，但会阻止所有缩放手势。
+- 如果只需要在特定页面允许缩放，应该动态修改 viewport 而不是全局放开。
+- 动态修改 viewport 是合法的，WebView 会实时响应变化。
+
+---
+
+## 27. Canvas 渲染的 PDF 需要手动处理双指缩放
+
+### 现象
+即使 viewport 允许缩放了，PDF canvas 内容仍然不会跟随双指手势缩放。
+
+### Root Cause
+viewport 缩放作用于整个页面（所有元素等比放大），而 PDF 是用 canvas 渲染的固定分辨率图像。用户期望的是 PDF 内容本身缩放（类似原生 PDF 阅读器），不是整个 UI 放大。
+
+### 解决方案
+手动监听双指触摸事件，计算缩放比例：
+```javascript
+var pinchState = null;
+var pinchStartScale = currentScale;
+
+// touchstart: 记录初始双指距离
+scrollContainer.addEventListener('touchstart', function(e) {
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    var dx = e.touches[0].clientX - e.touches[1].clientX;
+    var dy = e.touches[0].clientY - e.touches[1].clientY;
+    pinchStartScale = currentScale;
+    pinchState = { dist: Math.sqrt(dx * dx + dy * dy) };
+  }
+}, { passive: false });
+
+// touchmove: 用 CSS transform 实时预览（零延迟）
+scrollContainer.addEventListener('touchmove', function(e) {
+  if (e.touches.length === 2 && pinchState) {
+    e.preventDefault();
+    var dx = e.touches[0].clientX - e.touches[1].clientX;
+    var dy = e.touches[0].clientY - e.touches[1].clientY;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    var ratio = dist / pinchState.dist;
+    var previewScale = Math.min(Math.max(pinchStartScale * ratio, 0.25), 5);
+    var ratioCSS = previewScale / currentScale;
+    pagesContainer.style.transform = 'scale(' + ratioCSS + ')';
+    document.getElementById('pdfZoomLevel').textContent = Math.round(previewScale * 100) + '%';
+    pinchPending = previewScale;
+  }
+}, { passive: false });
+
+// touchend: 松手后用新 scale 重新渲染 canvas（保证清晰度）
+scrollContainer.addEventListener('touchend', function(e) {
+  if (e.touches.length < 2 && pinchState) {
+    pagesContainer.style.transform = '';
+    if (pinchPending && Math.abs(pinchPending - currentScale) > 0.01) {
+      currentScale = pinchPending;
+      renderAllPages();  // 重新渲染 canvas
+    }
+    pinchState = null;
+    pinchPending = false;
+  }
+});
+```
+
+### 关键技巧
+- **双指拖动过程中**用 CSS `transform:scale()` 实时预览（GPU 加速，零延迟）
+- **松手后**才用新 scale 重新渲染 canvas（保证高清晰度，但有短暂渲染时间）
+- 这种"CSS 实时预览 + canvas 重新渲染"的两阶段策略是移动端 PDF 缩放的最佳实践
+
+### 教训
+- `viewport` 缩放和内容缩放是两个不同的概念，不能混淆。
+- canvas 元素不会自动跟随 viewport 缩放，需要手动处理触摸事件。
+- `e.preventDefault()` + `{ passive: false }` 是拦截触摸事件的必要配置。
+- 渲染所有页面的 canvas 是耗时操作，只在手势结束时执行，不能在手势过程中执行。
+
+---
+
+## 28. PDF 标注/便签等交互功能的架构设计
+
+### 设计决策
+在 canvas 上叠加 annotation overlay（另一个 canvas），而不是直接在 PDF canvas 上绘制：
+- PDF canvas：只读渲染，缩放时完全重绘
+- Annotation canvas：独立的半透明层，用绝对定位覆盖在 PDF canvas 上
+- 便签 marker：HTML 元素（div），用绝对定位放在页面容器上
+
+### 为什么用双 canvas 而不是单 canvas
+1. 缩放时需要重绘 PDF，annotations 不需要重新计算坐标
+2. 清除标注不需要重新渲染 PDF 内容
+3. 标注的坐标基于 PDF 原始尺寸（devicePixelRatio 缩放前），缩放时自动对齐
+
+### 教训
+- 交互式 canvas 应用（标注、绘图）应该用多层 canvas，渲染层和交互层分离。
+- 便签/标记等 UI 元素用 HTML div 比 canvas 更方便（支持事件、样式、tooltip）。
+- 标注坐标存储时应使用 canvas 内部坐标（高分辨率），而不是 CSS 像素坐标。
