@@ -111,6 +111,19 @@ jobs:
       - name: Install npm deps
         run: npm ci
 
+      - name: Setup debug keystore
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: android-debug-keystore
+
+      - name: Generate debug keystore (if not cached)
+        run: |
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            mkdir -p $HOME/.android
+            keytool -genkeypair -v -keystore $HOME/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
       - name: Sync Android
         run: npx cap sync android
 

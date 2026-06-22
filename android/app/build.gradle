@@ -16,10 +16,21 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        debug {
+            storeFile file(System.getenv("ANDROID_KEYSTORE") ?: "${System.getProperty('user.home')}/.android/debug.keystore")
+            storePassword System.getenv("ANDROID_KEYSTORE_PASS") ?: "android"
+            keyAlias System.getenv("ANDROID_KEY_ALIAS") ?: "androiddebugkey"
+            keyPassword System.getenv("ANDROID_KEY_PASS") ?: "android"
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            signingConfig signingConfigs.debug
         }
     }
 }
