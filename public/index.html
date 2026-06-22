@@ -1948,6 +1948,12 @@ async function renderPdfWithPdfJs(buf) {
     wrapper.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:var(--bg);display:flex;flex-direction:column;';
     document.body.appendChild(wrapper);
 
+    var origViewport = document.querySelector('meta[name="viewport"]');
+    var origViewportContent = origViewport ? origViewport.content : '';
+    if (origViewport) {
+      origViewport.content = 'width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover';
+    }
+
     var currentScale = Math.min(window.innerWidth / 600, 1.5);
     var currentPage = 1;
     var totalPages = pdf.numPages;
@@ -2218,6 +2224,7 @@ async function renderPdfWithPdfJs(buf) {
       this.style.color = showThumbs ? '#fff' : '';
     });
     document.getElementById('pdfClose').addEventListener('click', function() {
+      if (origViewport) origViewport.content = origViewportContent;
       wrapper.remove();
       clearDocument();
     });
@@ -2329,6 +2336,45 @@ async function renderPdfWithPdfJs(buf) {
       }
       drawingState = null;
       renderAnnotations();
+    });
+
+    var pinchState = null;
+    var pinchStartScale = currentScale;
+    var pinchPending = false;
+    scrollContainer.addEventListener('touchstart', function(e) {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        var dx = e.touches[0].clientX - e.touches[1].clientX;
+        var dy = e.touches[0].clientY - e.touches[1].clientY;
+        pinchStartScale = currentScale;
+        pinchState = { dist: Math.sqrt(dx * dx + dy * dy) };
+      }
+    }, { passive: false });
+    scrollContainer.addEventListener('touchmove', function(e) {
+      if (e.touches.length === 2 && pinchState) {
+        e.preventDefault();
+        var dx = e.touches[0].clientX - e.touches[1].clientX;
+        var dy = e.touches[0].clientY - e.touches[1].clientY;
+        var dist = Math.sqrt(dx * dx + dy * dy);
+        var ratio = dist / pinchState.dist;
+        var previewScale = Math.min(Math.max(pinchStartScale * ratio, 0.25), 5);
+        var ratioCSS = previewScale / currentScale;
+        pagesContainer.style.transform = 'scale(' + ratioCSS + ')';
+        pagesContainer.style.transformOrigin = 'top center';
+        document.getElementById('pdfZoomLevel').textContent = Math.round(previewScale * 100) + '%';
+        pinchPending = previewScale;
+      }
+    }, { passive: false });
+    scrollContainer.addEventListener('touchend', function(e) {
+      if (e.touches.length < 2 && pinchState) {
+        pagesContainer.style.transform = '';
+        if (pinchPending && Math.abs(pinchPending - currentScale) > 0.01) {
+          currentScale = pinchPending;
+          renderAllPages().then(function() { renderThumbnails(); updatePageInfo(); });
+        }
+        pinchState = null;
+        pinchPending = false;
+      }
     });
 
     scrollContainer.addEventListener('scroll', updatePageInfo);
