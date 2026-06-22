@@ -44,6 +44,7 @@ jobs:
             artifact-name: windows-bundles
             artifact-path: |
               src-tauri/target/release/bundle/nsis/*.exe
+              src-tauri/target/release/bundle/msi/*.msi
 
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 60
@@ -105,6 +106,11 @@ jobs:
             libappindicator3-dev \
             librsvg2-dev \
             patchelf
+
+      - name: Install WiX Toolset (Windows)
+        if: runner.os == 'Windows'
+        run: choco install wixtoolset -y --no-progress
+        shell: bash
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -318,7 +324,7 @@ jobs:
             - **linux-amd64-bundles**: x86_64 AppImage + deb（适用于 银河麒麟/深度UOS）
             - **linux-arm64-bundles**: ARM64 AppImage + deb（适用于 ARM64 的 银河麒麟/深度UOS）
             - **macos-bundle**: macOS DMG 安装包
-            - **windows-bundles**: Windows NSIS 安装包
+            - **windows-bundles**: Windows NSIS + MSI 安装包
 
             ### 移动版（Capacitor）
             - **android-apk**: Android APK（可直接安装）
