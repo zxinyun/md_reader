@@ -84,6 +84,10 @@ jobs:
             let cargo = fs.readFileSync('src-tauri/Cargo.toml','utf8');
             cargo = cargo.replace(/^version = \".*\"/m, 'version = \"$VERSION\"');
             fs.writeFileSync('src-tauri/Cargo.toml', cargo);
+            // index.html — replace __APP_VERSION__ placeholder
+            let html = fs.readFileSync('public/index.html', 'utf8');
+            html = html.replace(/__APP_VERSION__/g, '$VERSION');
+            fs.writeFileSync('public/index.html', html);
           "
 
       - name: Setup Node.js
@@ -156,6 +160,9 @@ jobs:
             let cargo = fs.readFileSync('src-tauri/Cargo.toml','utf8');
             cargo = cargo.replace(/^version = \".*\"/m, 'version = \"$VERSION\"');
             fs.writeFileSync('src-tauri/Cargo.toml', cargo);
+            let html = fs.readFileSync('public/index.html', 'utf8');
+            html = html.replace(/__APP_VERSION__/g, '$VERSION');
+            fs.writeFileSync('public/index.html', html);
           "
 
       - name: Setup Node.js
@@ -238,6 +245,9 @@ jobs:
             const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
             pkg.version = '$VERSION';
             fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+            let html = fs.readFileSync('public/index.html', 'utf8');
+            html = html.replace(/__APP_VERSION__/g, '$VERSION');
+            fs.writeFileSync('public/index.html', html);
           "
 
       - name: Setup Node.js

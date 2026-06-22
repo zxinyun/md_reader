@@ -144,12 +144,29 @@ on:
       let cargo = fs.readFileSync('src-tauri/Cargo.toml','utf8');
       cargo = cargo.replace(/^version = \".*\"/m, 'version = \"$VERSION\"');
       fs.writeFileSync('src-tauri/Cargo.toml', cargo);
+      // index.html — replace __APP_VERSION__ placeholder
+      let html = fs.readFileSync('public/index.html', 'utf8');
+      html = html.replace(/__APP_VERSION__/g, '$VERSION');
+      fs.writeFileSync('public/index.html', html);
     "
 ```
+
+**需要同步版本的文件：**
+- `src-tauri/tauri.conf.json` — Tauri 打包版本
+- `package.json` — npm 包版本
+- `src-tauri/Cargo.toml` — Rust crate 版本
+- `public/index.html` — 应用内 About 对话框和 BUILD ID
+
+**index.html 中的版本占位符：**
+```javascript
+const __APP_VERSION__ = '__APP_VERSION__';  // CI 替换为实际版本号
+```
+About 对话框和启动日志使用此变量显示版本。
 
 **踩坑记录：**
 - 版本回退值必须是 `0.0.0`（纯数字），不能是 `0.0.0-dev`，否则 WiX/MSI 构建失败
 - WiX 要求版本号预发布标识必须是纯数字且 ≤ 65535
+- 所有显示版本号的地方都必须从同一来源派生，避免版本不一致
 
 ### 2.3 桌面端构建（Tauri）
 
@@ -503,13 +520,17 @@ viewport.content = origContent;
 - [ ] iOS xcarchive 上传前 zip 压缩
 - [ ] 版本回退值是 `0.0.0`（纯数字）
 - [ ] Release job 用 `needs: [build, android, ios]` 等待所有构建
+- [ ] 版本同步覆盖所有配置文件（tauri.conf.json / package.json / Cargo.toml / index.html）
 
 ### 移动端功能
 - [ ] PDF 用 pdf.js 渲染（不用 iframe）
 - [ ] 渲染 scale 乘以 `devicePixelRatio`
-- [ ] 双指缩放：动态 viewport + wrapper 级 touch 事件
+- [ ] 双指缩放：动态 viewport + wrapper 级 touch 事件（PDF）
+- [ ] 双指缩放：contentArea 级 touch 事件（通用内容）
 - [ ] 工具栏两行布局（移动端不会溢出）
 - [ ] 标注工具可折叠
+- [ ] 自动恢复上次会话（无确认弹窗）
+- [ ] 版本号在 About 对话框中动态显示
 
 ---
 

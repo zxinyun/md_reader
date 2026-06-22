@@ -682,7 +682,7 @@ body.auto .search-active { background: #ff6b35; color: #fff; }
     <div id="restoreBtnArea" style="margin-top:16px;display:none">
       <button class="theme-opt" id="restoreBtn" style="background:var(--primary);color:#fff;padding:10px 24px;font-size:15px">📖 恢复上次阅读</button>
     </div>
-    <div id="buildId" style="margin-top:8px;font-size:10px;color:var(--text-secondary);opacity:0.5" data-build="20260619-0500">BUILD: 20260619-0500</div>
+    <div id="buildId" style="margin-top:8px;font-size:10px;color:var(--text-secondary);opacity:0.5" data-build="20260619-0500">BUILD: dev</div>
   </div>
   <div class="loading" id="loadingIndicator" style="display:none">
     <div class="spinner" id="loadingSpinner"></div>
@@ -786,6 +786,7 @@ body.auto .search-active { background: #ff6b35; color: #fff; }
 <script src="file-api.js"></script>
 <script>
 const __BUILD_ID__ = '20260619-0500';
+const __APP_VERSION__ = '__APP_VERSION__';
 const __FEATURES__ = { multiFile: true, imageSupport: true, debugPanel: true };
 // ===== Markdown Parser (standalone) =====
 const mdParser = (() => {
@@ -1138,7 +1139,7 @@ function showAboutDialog() {
   dialog.innerHTML = `
     <div style="font-size:40px;margin-bottom:8px">📖</div>
     <h2 style="margin:0 0 4px;font-size:18px">通用阅读器</h2>
-    <p style="margin:0 0 16px;font-size:13px;color:var(--text-secondary)">v2.0</p>
+    <p style="margin:0 0 16px;font-size:13px;color:var(--text-secondary)">v${typeof __APP_VERSION__ !== 'undefined' && __APP_VERSION__ !== '__APP_VERSION__' ? __APP_VERSION__ : 'dev'}</p>
     <p style="margin:0 0 6px;font-size:14px">支持 MD / HTML / TXT / PDF /<br>Word / Excel / PPT / CSV / JSON / 代码</p>
     <p style="margin:16px 0 20px;font-size:13px;color:var(--text-secondary)">版权作者：洋芋哥</p>
     <button id="aboutOkBtn" style="padding:8px 32px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:14px;cursor:pointer;min-width:100px">确定</button>
@@ -1532,35 +1533,16 @@ async function restoreLastSession() {
       if (!allFiles.length) return;
       const last = allFiles.sort((a, b) => b.updatedAt - a.updatedAt)[0];
       lastMeta = { name: last.name, type: last.type, ext: last.name.includes('.') ? last.name.split('.').pop() : '' };
-      // Also set the file content
+      // Auto-restore without confirmation
       const prog = await dbGet('progress', last.name).catch(() => null);
-      const pct = prog ? Math.round((prog.scrollTop / Math.max(prog.scrollHeight, 1)) * 100) : 0;
-      const restore = await new Promise(resolve => {
-        openSheet(`
-          <div class="sheet-handle"></div>
-          <div class="sheet-title">📖 恢复上次阅读？</div>
-          <div class="sheet-group" style="font-size:14px;line-height:1.6">
-            <p style="color:var(--text-secondary);margin:0 0 12px">上次打开: <strong>${escapeHtml(last.name)}</strong>${prog ? `<br>阅读进度: ${pct}%` : ''}</p>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-              <button class="theme-opt" id="restoreYes" style="background:var(--primary);color:#fff">📖 恢复</button>
-              <button class="theme-opt" id="restoreNo">忽略</button>
-            </div>
-          </div>`);
-        setTimeout(() => {
-          document.getElementById('restoreYes').addEventListener('click', () => { closeSheet(); resolve(true); });
-          document.getElementById('restoreNo').addEventListener('click', () => { closeSheet(); resolve(false); });
-        }, 50);
-      });
-      if (restore) {
-        state.fileContent = last.content;
-        state.fileName = last.name;
-        state.fileType = last.type;
-        state.fileExt = lastMeta.ext;
-        titleDisplay.textContent = last.name;
-        renderContent();
-        if (prog) setTimeout(() => scrollContentToPos(prog.scrollTop, 'instant'), 400);
-        showToast('已恢复: ' + last.name);
-      }
+      state.fileContent = last.content;
+      state.fileName = last.name;
+      state.fileType = last.type;
+      state.fileExt = lastMeta.ext;
+      titleDisplay.textContent = last.name;
+      renderContent();
+      if (prog) setTimeout(() => scrollContentToPos(prog.scrollTop, 'instant'), 400);
+      showToast('已恢复: ' + last.name);
       return;
     }
 
@@ -1568,46 +1550,23 @@ async function restoreLastSession() {
     const dbFile = await dbGet('files', lastMeta.name).catch(() => null);
     const prog = await dbGet('progress', lastMeta.name).catch(() => null);
     const hasContent = !!dbFile;
-    const pct = prog ? Math.round((prog.scrollTop / Math.max(prog.scrollHeight, 1)) * 100) : 0;
-    const lastModified = new Date(lastMeta.timestamp || prog?.updatedAt || Date.now());
-    const timeStr = lastModified.toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-    const restore = await new Promise(resolve => {
-      const extra = hasContent ? (prog ? `阅读进度: ${pct}%` : '') : '⚠️ 需重新选择文件';
-      openSheet(`
-        <div class="sheet-handle"></div>
-        <div class="sheet-title">📖 恢复上次阅读？</div>
-        <div class="sheet-group" style="font-size:14px;line-height:1.6">
-          <p style="color:var(--text-secondary);margin:0 0 12px">上次打开: <strong>${escapeHtml(lastMeta.name)}</strong><br>${timeStr}${extra ? '<br>' + extra : ''}</p>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <button class="theme-opt" id="restoreYes" style="background:var(--primary);color:#fff">📖 恢复</button>
-            <button class="theme-opt" id="restoreNo">忽略</button>
-          </div>
-        </div>`);
-      setTimeout(() => {
-        document.getElementById('restoreYes').addEventListener('click', () => { closeSheet(); resolve(true); });
-        document.getElementById('restoreNo').addEventListener('click', () => { closeSheet(); resolve(false); });
-      }, 50);
-    });
-    if (restore) {
-      if (hasContent) {
-        state.fileContent = dbFile.content;
-        state.fileName = lastMeta.name;
-        state.fileType = dbFile.type || lastMeta.type;
-        state.fileExt = lastMeta.ext;
-        titleDisplay.textContent = lastMeta.name;
-        renderContent();
-        if (prog) setTimeout(() => scrollContentToPos(prog.scrollTop, 'instant'), 400);
-        showToast('已恢复: ' + lastMeta.name);
-      } else if (lastMeta.type === 'html' && !lastMeta.ext) {
-        // URL browsing session — re-load the URL
-        closeSheet();
-        browseUrl(lastMeta.name);
-      } else {
-        // Binary file — trigger file picker
-        closeSheet();
-        FileAPI.pickFile(ACCEPT_EXTS).then(fd => { if (fd) loadFile(fd); });
-      }
+    if (hasContent) {
+      // Auto-restore without confirmation
+      state.fileContent = dbFile.content;
+      state.fileName = lastMeta.name;
+      state.fileType = dbFile.type || lastMeta.type;
+      state.fileExt = lastMeta.ext;
+      titleDisplay.textContent = lastMeta.name;
+      renderContent();
+      if (prog) setTimeout(() => scrollContentToPos(prog.scrollTop, 'instant'), 400);
+      showToast('已恢复: ' + lastMeta.name);
+    } else if (lastMeta.type === 'html' && !lastMeta.ext) {
+      // URL browsing session — re-load the URL
+      browseUrl(lastMeta.name);
+    } else {
+      // Binary file without cached content — show restore button in empty state
+      showRestoreButtonIfAvailable();
     }
   } catch(e) { /* silent */ }
 }
@@ -2644,7 +2603,7 @@ async function renderDocx(arrayBuffer) {
 }
 
 // ===== Render .doc (legacy Word binary, or Word HTML exported from this app) =====
-function renderDoc(arrayBuffer) {
+async function renderDoc(arrayBuffer) {
   try {
     // Check if this is actually Word HTML (exported from this app's "另存为 → Word")
     const header = new TextDecoder('utf-8').decode(arrayBuffer.slice(0, 1024));
@@ -2658,11 +2617,78 @@ function renderDoc(arrayBuffer) {
       return;
     }
   } catch(e) {}
-  // Real binary .doc — not supported
+
+  // Check if it's actually a .docx file (starts with PK ZIP signature)
+  const sig = new Uint8Array(arrayBuffer.slice(0, 4));
+  if (sig[0] === 0x50 && sig[1] === 0x4B && sig[2] === 0x03 && sig[3] === 0x04) {
+    // It's a ZIP file — try mammoth.js (docx format)
+    try {
+      showLoading('正在解析 Word 文档...', true);
+      if (typeof mammoth === 'undefined') {
+        await loadScript('https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js');
+      }
+      const result = await mammoth.convertToHtml({ arrayBuffer });
+      if (result.value && result.value.trim()) {
+        showContent();
+        mdContent.style.display = 'block';
+        mdContent.innerHTML = result.value;
+        buildWordOutline();
+        showToast(`已打开: ${state.fileName}`);
+        reapplyZoom();
+        return;
+      }
+    } catch(e) {}
+  }
+
+  // Real binary .doc — try to extract text content
+  try {
+    showLoading('正在解析 .doc 文档...', true);
+    const text = extractTextFromBinaryDoc(arrayBuffer);
+    if (text && text.trim().length > 10) {
+      showContent();
+      mdContent.style.display = 'block';
+      mdContent.innerHTML = `<div style="padding:16px;background:var(--bg-card);border-radius:var(--radius-sm);white-space:pre-wrap;font-family:var(--font-body);line-height:1.8;">${escapeHtml(text)}</div>`;
+      buildWordOutline();
+      showToast(`已提取文本: ${state.fileName}（格式可能不完整）`);
+      reapplyZoom();
+      return;
+    }
+  } catch(e) {}
+
+  // All attempts failed
   showContent();
   mdContent.style.display = 'block';
-  mdContent.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><h2>不支持旧版 .doc 格式</h2><p>请用 Word / WPS 另存为 <strong>.docx</strong> 格式后再打开</p></div>`;
-  showToast('.doc 格式不支持');
+  mdContent.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><h2>无法解析 .doc 文件</h2><p>该文件可能是加密或特殊格式的 Word 文档。<br>请尝试用 Word / WPS 打开后另存为 <strong>.docx</strong> 格式后再导入。</p></div>`;
+  showToast('.doc 格式解析失败');
+}
+
+function extractTextFromBinaryDoc(arrayBuffer) {
+  // Simple binary .doc text extraction: scan for UTF-16LE text sequences
+  const bytes = new Uint8Array(arrayBuffer);
+  var texts = [];
+  var current = '';
+  for (var i = 0; i < bytes.length - 1; i++) {
+    var lo = bytes[i];
+    var hi = bytes[i + 1];
+    // Check for printable ASCII or common CJK ranges in UTF-16LE
+    if (hi === 0x00 && lo >= 0x20 && lo < 0x7F) {
+      current += String.fromCharCode(lo);
+    } else if (lo >= 0x4E00 && lo <= 0x9FFF && hi === 0x00) {
+      // CJK unified ideographs
+      current += String.fromCharCode(lo);
+    } else if (lo >= 0x3000 && lo <= 0x303F && hi === 0x00) {
+      // CJK symbols and punctuation
+      current += String.fromCharCode(lo);
+    } else if (lo >= 0xFF00 && lo <= 0xFFEF) {
+      // Fullwidth forms
+      current += String.fromCharCode(lo - 0xFEE0);
+    } else {
+      if (current.length > 3) texts.push(current);
+      current = '';
+    }
+  }
+  if (current.length > 3) texts.push(current);
+  return texts.join('\n');
 }
 
 function buildWordOutline() {
@@ -5242,6 +5268,54 @@ $('actEdit').addEventListener('click', toggleEditor);
 $('actZoomIn').addEventListener('click', () => applyZoom(0.1));
 $('actZoomOut').addEventListener('click', () => applyZoom(-0.1));
 zoomDisplay.textContent = Math.round(state.zoomLevel * 100) + '%';
+
+// ===== Pinch-to-zoom for general content (non-PDF) =====
+(function() {
+  var gPinchState = null;
+  var gPinchStartZoom = 1;
+  var gPinchPending = false;
+  contentArea.addEventListener('touchstart', function(e) {
+    if (e.touches.length === 2 && !document.getElementById('pdfViewerWrapper')) {
+      e.preventDefault();
+      var dx = e.touches[0].clientX - e.touches[1].clientX;
+      var dy = e.touches[0].clientY - e.touches[1].clientY;
+      gPinchStartZoom = state.zoomLevel;
+      gPinchState = { dist: Math.sqrt(dx * dx + dy * dy) };
+    }
+  }, { passive: false });
+  contentArea.addEventListener('touchmove', function(e) {
+    if (e.touches.length === 2 && gPinchState) {
+      e.preventDefault();
+      var dx = e.touches[0].clientX - e.touches[1].clientX;
+      var dy = e.touches[0].clientY - e.touches[1].clientY;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      var ratio = dist / gPinchState.dist;
+      var previewZoom = Math.min(4, Math.max(0.25, gPinchStartZoom * ratio));
+      // Apply CSS transform for real-time preview
+      var target = mdContent.style.display !== 'none' ? mdContent : htmlFrame;
+      if (target && target !== htmlFrame._prevPinchTarget) {
+        target.style.transformOrigin = 'top left';
+        htmlFrame.style.transformOrigin = 'top left';
+      }
+      target.style.transform = 'scale(' + previewZoom + ')';
+      target.style.transformOrigin = 'top left';
+      contentArea.style.overflow = 'auto';
+      zoomDisplay.textContent = Math.round(previewZoom * 100) + '%';
+      gPinchPending = previewZoom;
+    }
+  }, { passive: false });
+  contentArea.addEventListener('touchend', function(e) {
+    if (e.touches.length < 2 && gPinchState) {
+      if (gPinchPending && Math.abs(gPinchPending - state.zoomLevel) > 0.01) {
+        state.zoomLevel = Math.round(gPinchPending * 100) / 100;
+        try { localStorage.setItem('reader-zoom', String(state.zoomLevel)); } catch(ex) {}
+        reapplyZoom();
+      }
+      gPinchState = null;
+      gPinchPending = false;
+    }
+  });
+})();
 // Drawing
 $('actDraw').addEventListener('click', toggleDrawMode);
 // Print
@@ -6026,6 +6100,12 @@ function _d(m) { _diag.push(m); var el = document.getElementById('debugPanel'); 
 function _showDiag() { var el = document.getElementById('debugPanel'); if (el) el.classList.add('show'); }
 function _clearDiag() { _diag = []; var el = document.getElementById('debugPanel'); if (el) el.classList.remove('show'); }
 _d('[STARTUP] BUILD=' + __BUILD_ID__);
+// Update buildId display with app version
+try {
+  var _ver = (typeof __APP_VERSION__ !== 'undefined' && __APP_VERSION__ !== '__APP_VERSION__') ? __APP_VERSION__ : 'dev';
+  var _buildEl = document.getElementById('buildId');
+  if (_buildEl) _buildEl.textContent = 'BUILD: ' + _ver;
+} catch(e) {}
 _d('[STARTUP] multiFile=' + __FEATURES__.multiFile + ' imgSupport=' + __FEATURES__.imageSupport + ' debugPanel=' + __FEATURES__.debugPanel);
 _d('[STARTUP] platform=' + (typeof platform !== 'undefined' ? platform : 'browser'));
 _d('[STARTUP] IMAGE_EXTS.has(jpg)=' + (typeof IMAGE_EXTS !== 'undefined' ? IMAGE_EXTS.has('jpg') : 'N/A'));

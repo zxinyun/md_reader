@@ -726,3 +726,99 @@ scrollContainer.addEventListener('touchend', function(e) {
 - 交互式 canvas 应用（标注、绘图）应该用多层 canvas，渲染层和交互层分离。
 - 便签/标记等 UI 元素用 HTML div 比 canvas 更方便（支持事件、样式、tooltip）。
 - 标注坐标存储时应使用 canvas 内部坐标（高分辨率），而不是 CSS 像素坐标。
+
+---
+
+## 29. 全平台内容双指缩放实现
+
+### 现象
+只有 PDF 查看器支持双指缩放，其他格式（Markdown/HTML/TXT/图片等）无法双指缩放。
+
+### Root Cause
+双指缩放只在 PDF 查看器的 `wrapper` 上实现了触摸事件处理，通用内容区域（`contentArea`）没有对应的实现。
+
+### 解决方案
+在 `contentArea` 上添加触摸事件监听，复用已有的 `applyZoom` 和 `reapplyZoom` 函数：
+```javascript
+contentArea.addEventListener('touchstart', function(e) {
+  if (e.touches.length === 2 && !document.getElementById('pdfViewerWrapper')) {
+    e.preventDefault();
+    gPinchStartZoom = state.zoomLevel;
+    gPinchState = { dist: Math.sqrt(dx * dx + dy * dy) };
+  }
+}, { passive: false });
+
+contentArea.addEventListener('touchmove', function(e) {
+  if (e.touches.length === 2 && gPinchState) {
+    e.preventDefault();
+    var target = mdContent.style.display !== 'none' ? mdContent : htmlFrame;
+    target.style.transform = 'scale(' + previewZoom + ')';
+    target.style.transformOrigin = 'top left';
+  }
+}, { passive: false });
+```
+
+### 关键技巧
+- 检查 `!document.getElementById('pdfViewerWrapper')` 避免与 PDF 查看器的缩放冲突
+- 复用 `state.zoomLevel` 和 `reapplyZoom()` 保持与按钮缩放一致
+- CSS transform 实时预览 + 松手后持久化到 `state.zoomLevel`
+
+### 教训
+- 功能扩展时要检查是否遗漏了其他内容类型。
+- 复用已有状态管理（`state.zoomLevel`）比创建独立状态更可靠。
+
+---
+
+## 30. 自动恢复会话去掉确认弹窗
+
+### 现象
+每次打开应用都弹出"恢复上次阅读？"确认框，用户需要手动点击"恢复"。
+
+### Root Cause
+`restoreLastSession()` 函数中使用 `openSheet()` 显示确认对话框，等待用户选择。
+
+### 解决方案
+去掉确认对话框，直接恢复：
+- 有缓存内容（IndexedDB）→ 直接渲染
+- 无缓存（二进制文件）→ 在空状态显示"恢复上次阅读"按钮（`showRestoreButtonIfAvailable`）
+
+### 教训
+- 移动端用户体验要求"打开即用"，减少确认步骤。
+- 二进制文件（PDF/图片）无法缓存到 IndexedDB，只能提示重新选择文件。
+
+---
+
+## 31. 版本号同步需要覆盖所有配置文件
+
+### 现象
+CI 自动更新了 `tauri.conf.json`、`Cargo.toml`、`package.json` 的版本号，但应用内"关于"对话框仍显示硬编码的 `v2.0`。
+
+### Root Cause
+`index.html` 中有三个硬编码的版本号：
+- About 对话框：`v2.0`
+- `__BUILD_ID__`：`20260619-0500`
+- HTML 中的 `buildId` div：`20260619-0500`
+
+CI 的版本同步脚本没有覆盖 `index.html`。
+
+### 解决方案
+1. 在 `index.html` 中定义 `__APP_VERSION__` 占位符：
+```javascript
+const __APP_VERSION__ = '__APP_VERSION__';
+```
+2. About 对话框使用动态版本：
+```javascript
+v${typeof __APP_VERSION__ !== 'undefined' && __APP_VERSION__ !== '__APP_VERSION__' ? __APP_VERSION__ : 'dev'}
+```
+3. CI 同步脚本增加 `index.html` 替换：
+```javascript
+let html = fs.readFileSync('public/index.html', 'utf8');
+html = html.replace(/__APP_VERSION__/g, '$VERSION');
+fs.writeFileSync('public/index.html', html);
+```
+4. 启动时更新 `buildId` div 的文本内容。
+
+### 教训
+- 版本号是「单一事实来源」，所有显示版本的地方都必须从同一来源派生。
+- 新增配置文件时，检查 CI 同步脚本是否覆盖了该文件。
+- 占位符替换比硬编码更可靠，但要确保所有 CI job 都执行替换。
