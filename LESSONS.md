@@ -353,3 +353,188 @@ zip -r ios-app.zip App.xcarchive
 8. **Release 触发** — 打新 tag 或手动触发，旧 tag 不会重新触发
 9. **统一 Release** — 多个构建 job 合并到一个 workflow，用 `needs` 串联
 10. **npm ci vs npm install** — CI 中优先用 `npm ci`，若依赖不同步则用 `npm install`
+11. **Shell 兼容性** — Windows runner 默认 PowerShell，含 bash 语法的步骤必须加 `shell: bash`
+12. **APK 签名** — CI 每次环境不同，debug keystore 需用 `actions/cache` 缓存保证签名一致
+13. **版本号自动化** — 从 git tag 自动提取版本号，CI 中用 Node.js 同步更新所有配置文件，避免手动改版本
+14. **NSIS 配置** — Tauri v2 内置 NSIS，无需外部安装；去掉 WiX 配置，显式声明 NSIS 选项
+
+---
+
+## 18. Android WebView 不支持 iframe + blob URL 渲染 PDF
+
+### 现象
+APK 打开 PDF 后不报错，但内容为空白。
+
+### Root Cause
+`renderPdf()` 使用 `<iframe>` + `blob:` URL 方案，依赖浏览器内置 PDF 查看器。Android WebView **没有内置 PDF 查看器**，blob URL 无法渲染。
+
+### 解决方案
+集成 pdf.js（Mozilla PDF.js），在 Capacitor 环境下用 `<canvas>` 逐页渲染：
+```javascript
+if (FileAPI.platform === 'capacitor') {
+  // 使用 pdf.js 渲染
+  const pdfjsLib = await import(baseUrl + 'lib/pdf.min.mjs');
+  // ... 渲染到 canvas
+} else {
+  // 桌面端继续用 iframe
+}
+```
+
+### 教训
+- **不要假设所有平台都有相同的浏览器能力**。Android WebView 是精简版 Chromium，缺少很多桌面 Chrome 的功能。
+- 移动端文件格式渲染（PDF/Word/Excel）必须有独立的渲染方案，不能依赖浏览器内置能力。
+- pdf.js 的 ESM 格式需要用 `import()` 动态加载，路径要用绝对路径（`baseUrl + 'lib/pdf.min.mjs'`），相对路径在 Capacitor 中可能解析失败。
+
+---
+
+## 19. PDF 渲染分辨率需要考虑 devicePixelRatio
+
+### 现象
+PDF 在手机上能显示但分辨率很低，文字模糊看不清。
+
+### Root Cause
+渲染 scale 只考虑了屏幕宽度，没有乘以 `window.devicePixelRatio`。手机屏幕 DPI 通常是 2-3x，不乘以 dpr 会导致渲染分辨率不足。
+
+### 修复
+```javascript
+var scale = baseScale * (window.devicePixelRatio || 1);
+```
+
+### 教训
+- 移动端 canvas 渲染必须考虑 `devicePixelRatio`，否则在高 DPI 屏幕上模糊。
+- 桌面端 `devicePixelRatio` 通常为 1，移动端通常为 2-3。
+
+---
+
+## 20. APK 签名一致性需要缓存 keystore
+
+### 现象
+每次 CI 构建的 APK 签名不同，无法覆盖安装升级。
+
+### Root Cause
+CI 每次运行都是全新环境，debug keystore 由 `keytool` 新生成，导致签名不一致。
+
+### 解决方案
+使用 `actions/cache@v4` 缓存 `~/.android/debug.keystore`：
+```yaml
+- name: Setup debug keystore
+  uses: actions/cache@v4
+  with:
+    path: ~/.android/debug.keystore
+    key: android-debug-keystore
+
+- name: Generate debug keystore (if not cached)
+  run: |
+    if [ ! -f "$HOME/.android/debug.keystore" ]; then
+      keytool -genkeypair -v -keystore $HOME/.android/debug.keystore ...
+    fi
+```
+
+同时在 `build.gradle` 中配置固定签名路径：
+```groovy
+signingConfigs {
+    debug {
+        storeFile file(System.getenv("ANDROID_KEYSTORE") ?: "${System.getProperty('user.home')}/.android/debug.keystore")
+    }
+}
+```
+
+### 教训
+- CI 环境中任何「自动生成」的文件（keystore、证书、配置）都需要缓存或固定，否则每次构建结果不一致。
+- debug keystore 是 APK 签名的基础，必须保证跨构建一致性。
+
+---
+
+## 21. 自动版本号管理（从 tag 提取）
+
+### 现象
+每次发版都要手动修改 `tauri.conf.json`、`Cargo.toml`、`package.json` 三个文件的版本号，容易遗漏或不同步。
+
+### 解决方案
+在 CI 中自动从 git tag 提取版本号，构建前同步更新所有配置文件：
+```yaml
+- name: Resolve version
+  id: ver
+  shell: bash
+  run: |
+    echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+- name: Sync version to config files
+  shell: bash
+  run: |
+    VERSION="${{ steps.ver.outputs.version }}"
+    node -e "
+      const fs = require('fs');
+      const tauri = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json','utf8'));
+      tauri.version = '$VERSION';
+      fs.writeFileSync('src-tauri/tauri.conf.json', JSON.stringify(tauri, null, 2));
+    "
+```
+
+发版只需：`git tag v1.0.9 && git push origin v1.0.9`
+
+### 教训
+- 版本号是「单一事实来源」（Single Source of Truth），应该只从一个地方（git tag）派生。
+- 用 Node.js 更新 JSON 文件比 `sed` 更可靠（跨平台兼容）。
+- `workflow_dispatch` 可以加 `inputs.version` 参数支持手动指定版本号。
+
+---
+
+## 22. Windows runner shell 兼容性
+
+### 现象
+Windows 构建 job 报错 `Missing '(' after 'if' in if statement`。
+
+### Root Cause
+GitHub Actions Windows runner 默认使用 PowerShell，而 shell 脚本用的是 bash 语法。没有指定 `shell: bash` 时，PowerShell 无法解析 bash 语法。
+
+### 修复
+所有包含 bash 语法的步骤必须显式声明 `shell: bash`：
+```yaml
+- name: Resolve version
+  shell: bash    # 必须加！
+  run: |
+    if [ ... ]; then
+```
+
+### 教训
+- GitHub Actions 的 `shell` 默认值因 runner 而异：Ubuntu/macOS 默认 `bash`，Windows 默认 `pwsh`。
+- 跨平台 workflow 中，**所有 shell 脚本步骤都应该显式声明 `shell: bash`**，不要依赖默认值。
+- `run: |` 块中的 bash 语法在 PowerShell 中会直接报错，不会被跳过。
+
+---
+
+## 23. PDF 查看器需要基本交互功能
+
+### 现象
+PDF 能显示但无法缩放、翻页，用户体验极差。
+
+### Root Cause
+初版只渲染了 canvas 页面，没有添加任何交互控件。移动端用户无法缩放查看细节，也无法快速跳转页面。
+
+### 解决方案
+添加完整的 PDF 查看器工具栏：
+- **翻页**：上一页 / 下一页按钮 + 滚动时自动更新页码
+- **缩放**：放大 / 缩小按钮 + 适应宽度按钮
+- **页码**：显示当前页 / 总页数
+- **关闭**：关闭 PDF 查看器返回主界面
+
+### 教训
+- 「能用」和「好用」是两回事。文件格式支持不能只停留在「能渲染」，必须有基本的阅读体验。
+- 移动端 PDF 查看器的核心功能：缩放、翻页、页码指示。缺少任何一个都严重影响体验。
+- 工具栏应该固定在顶部（`position:fixed`），不随页面滚动。
+
+---
+
+## 移动端文件格式支持检查清单
+
+在 Tauri + Capacitor 多平台项目中支持文件格式时，逐项确认：
+
+1. **PDF** — 桌面端用 iframe + blob URL，移动端必须用 pdf.js
+2. **PDF 分辨率** — 渲染 scale 必须乘以 `devicePixelRatio`
+3. **PDF 交互** — 必须有缩放、翻页、页码显示
+4. **Word/Excel/PPT** — 桌面端用 mammoth/docx-preview/xlsx/pptxjs，移动端需验证兼容性
+5. **图片** — 各平台原生支持，但大图需要压缩处理
+6. **文件读取** — Capacitor 的 `readAsArrayBuffer` 对 `_uri` 路径支持不完整，需要特殊处理
+7. **文件选择** — Capacitor 回退到 Web `<input type="file">`，不支持目录选择
+8. **保存文件** — Capacitor 不支持原生保存对话框，需要回退到 Blob 下载
