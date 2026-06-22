@@ -1942,44 +1942,79 @@ async function renderPdfWithPdfJs(buf) {
     htmlFrame.style.display = 'none';
 
     var wrapper = document.getElementById('pdfViewerWrapper');
-    if (!wrapper) {
-      wrapper = document.createElement('div');
-      wrapper.id = 'pdfViewerWrapper';
-      wrapper.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:var(--bg);display:flex;flex-direction:column;';
-      document.body.appendChild(wrapper);
-    }
-    wrapper.innerHTML = '';
+    if (wrapper) wrapper.remove();
+    wrapper = document.createElement('div');
+    wrapper.id = 'pdfViewerWrapper';
+    wrapper.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:var(--bg);display:flex;flex-direction:column;';
+    document.body.appendChild(wrapper);
 
     var currentScale = Math.min(window.innerWidth / 600, 1.5);
     var currentPage = 1;
     var totalPages = pdf.numPages;
+    var baseWidth = 0;
+    var thumbScale = 0.12;
+    var showThumbs = true;
+    var annotations = {};
+    var notes = {};
+    var activeTool = 'none';
+    var drawColor = '#FFEB3B';
+    var drawWidth = 3;
+    var pageCanvases = [];
+    var thumbCanvases = [];
+
+    var btnStyle = 'padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;cursor:pointer;white-space:nowrap;';
+    var sepStyle = 'width:1px;height:20px;background:var(--border);margin:0 2px;flex-shrink:0;';
 
     var toolbar = document.createElement('div');
-    toolbar.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:6px;padding:8px;background:var(--bg-card);border-bottom:1px solid var(--border);flex-shrink:0;user-select:none;';
+    toolbar.style.cssText = 'display:flex;align-items:center;gap:4px;padding:6px 8px;background:var(--bg-card);border-bottom:1px solid var(--border);flex-shrink:0;user-select:none;flex-wrap:wrap;';
     toolbar.innerHTML = [
-      '<button id="pdfPrev" style="padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:16px;cursor:pointer;">◀</button>',
-      '<span id="pdfPageInfo" style="font-size:13px;color:var(--text);min-width:60px;text-align:center;">1/' + totalPages + '</span>',
-      '<button id="pdfNext" style="padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:16px;cursor:pointer;">▶</button>',
-      '<span style="width:1px;height:20px;background:var(--border);margin:0 4px;"></span>',
-      '<button id="pdfZoomOut" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:16px;cursor:pointer;">−</button>',
-      '<span id="pdfZoomLevel" style="font-size:12px;color:var(--text-secondary);min-width:40px;text-align:center;">100%</span>',
-      '<button id="pdfZoomIn" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:16px;cursor:pointer;">+</button>',
-      '<button id="pdfFitWidth" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:12px;cursor:pointer;">宽度</button>',
-      '<span style="width:1px;height:20px;background:var(--border);margin:0 4px;"></span>',
-      '<button id="pdfClose" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:14px;cursor:pointer;">✕</button>'
+      '<button id="pdfThumbs" title="缩略图" style="' + btnStyle + 'font-size:16px;">☰</button>',
+      '<button id="pdfPrev" title="上一页" style="' + btnStyle + 'font-size:16px;">◀</button>',
+      '<input id="pdfPageInput" type="number" min="1" max="' + totalPages + '" value="1" style="width:44px;text-align:center;padding:4px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;" />',
+      '<span id="pdfPageInfo" style="font-size:13px;color:var(--text-secondary);">/' + totalPages + '</span>',
+      '<button id="pdfNext" title="下一页" style="' + btnStyle + 'font-size:16px;">▶</button>',
+      '<span style="' + sepStyle + '"></span>',
+      '<button id="pdfZoomOut" title="缩小" style="' + btnStyle + 'font-size:16px;">−</button>',
+      '<span id="pdfZoomLevel" style="font-size:12px;color:var(--text-secondary);min-width:36px;text-align:center;">100%</span>',
+      '<button id="pdfZoomIn" title="放大" style="' + btnStyle + 'font-size:16px;">+</button>',
+      '<button id="pdfFitWidth" title="适合宽度" style="' + btnStyle + '">宽度</button>',
+      '<button id="pdfFitPage" title="适合页面" style="' + btnStyle + '">页面</button>',
+      '<span style="' + sepStyle + '"></span>',
+      '<button id="pdfToolHighlight" title="高亮标注" style="' + btnStyle + 'font-size:16px;">🖍</button>',
+      '<button id="pdfToolDraw" title="自由画笔" style="' + btnStyle + 'font-size:16px;">✏</button>',
+      '<button id="pdfToolRect" title="矩形框" style="' + btnStyle + 'font-size:16px;">▭</button>',
+      '<button id="pdfToolUnderline" title="下划线" style="' + btnStyle + 'font-size:16px;">U̲</button>',
+      '<select id="pdfDrawColor" style="padding:4px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:12px;">' +
+        '<option value="#FFEB3B" style="color:#FFEB3B">黄色</option>' +
+        '<option value="#FF5722" style="color:#FF5722">红色</option>' +
+        '<option value="#4CAF50" style="color:#4CAF50">绿色</option>' +
+        '<option value="#2196F3" style="color:#2196F3">蓝色</option>' +
+        '<option value="#FF9800" style="color:#FF9800">橙色</option>' +
+      '</select>',
+      '<button id="pdfToolNote" title="添加便签" style="' + btnStyle + 'font-size:16px;">📝</button>',
+      '<button id="pdfToolEraser" title="清除当前页标注" style="' + btnStyle + 'font-size:14px;">🗑</button>',
+      '<span style="' + sepStyle + '"></span>',
+      '<button id="pdfClose" title="关闭" style="' + btnStyle + 'font-size:14px;color:#f44336;">✕</button>'
     ].join('');
     wrapper.appendChild(toolbar);
 
+    var body = document.createElement('div');
+    body.style.cssText = 'flex:1;display:flex;overflow:hidden;position:relative;';
+
+    var thumbPanel = document.createElement('div');
+    thumbPanel.id = 'pdfThumbPanel';
+    thumbPanel.style.cssText = 'width:140px;overflow-y:auto;border-right:1px solid var(--border);background:var(--bg-card);flex-shrink:0;padding:8px;display:flex;flex-direction:column;gap:6px;';
+    body.appendChild(thumbPanel);
+
     var scrollContainer = document.createElement('div');
-    scrollContainer.style.cssText = 'flex:1;overflow:auto;padding:8px;-webkit-overflow-scrolling:touch;';
-    wrapper.appendChild(scrollContainer);
+    scrollContainer.style.cssText = 'flex:1;overflow:auto;padding:12px;-webkit-overflow-scrolling:touch;';
+    body.appendChild(scrollContainer);
+
+    wrapper.appendChild(body);
 
     var pagesContainer = document.createElement('div');
-    pagesContainer.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:8px;';
+    pagesContainer.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:8px;position:relative;';
     scrollContainer.appendChild(pagesContainer);
-
-    var pageCanvases = [];
-    var baseWidth = 0;
 
     function updatePageInfo() {
       var scrollTop = scrollContainer.scrollTop;
@@ -1991,8 +2026,66 @@ async function renderPdfWithPdfJs(buf) {
           break;
         }
       }
-      document.getElementById('pdfPageInfo').textContent = currentPage + '/' + totalPages;
+      document.getElementById('pdfPageInfo').textContent = '/' + totalPages;
+      document.getElementById('pdfPageInput').value = currentPage;
       document.getElementById('pdfZoomLevel').textContent = Math.round(currentScale * 100) + '%';
+      highlightThumb(currentPage);
+    }
+
+    function highlightThumb(page) {
+      thumbCanvases.forEach(function(t, idx) {
+        t.container.style.outline = (idx + 1 === page) ? '2px solid var(--primary)' : 'none';
+      });
+    }
+
+    async function renderThumbnails() {
+      thumbPanel.innerHTML = '';
+      thumbCanvases = [];
+      for (var i = 1; i <= totalPages; i++) {
+        var page = await pdf.getPage(i);
+        var vp = page.getViewport({ scale: thumbScale * (window.devicePixelRatio || 1) });
+        var c = document.createElement('canvas');
+        c.width = vp.width;
+        c.height = vp.height;
+        c.style.cssText = 'width:100%;height:auto;display:block;border-radius:4px;cursor:pointer;';
+        var ctx = c.getContext('2d');
+        await page.render({ canvasContext: ctx, viewport: vp }).promise;
+        var label = document.createElement('div');
+        label.style.cssText = 'text-align:center;font-size:11px;color:var(--text-secondary);padding:2px 0;';
+        label.textContent = i;
+        var container = document.createElement('div');
+        container.style.cssText = 'padding:2px;border-radius:6px;cursor:pointer;transition:background 0.15s;';
+        container.onmouseenter = function() { this.style.background = 'var(--bg-hover, rgba(128,128,128,0.1))'; };
+        container.onmouseleave = function() { this.style.background = 'transparent'; };
+        container.appendChild(c);
+        container.appendChild(label);
+        (function(pageNum) {
+          container.addEventListener('click', function() {
+            var target = pageCanvases[pageNum - 1];
+            if (target) scrollContainer.scrollTo({ top: target.element.offsetTop - 10, behavior: 'smooth' });
+          });
+        })(i);
+        thumbPanel.appendChild(container);
+        thumbCanvases.push({ container: container, pageNum: i });
+      }
+      highlightThumb(currentPage);
+    }
+
+    function createPageOverlay(pageNum) {
+      var existing = pagesContainer.querySelector('[data-overlay="' + pageNum + '"]');
+      if (existing) existing.remove();
+      var pageData = pageCanvases[pageNum - 1];
+      if (!pageData) return null;
+      var wrap = pageData.element;
+      var canvas = pageData.canvas;
+      var overlay = document.createElement('canvas');
+      overlay.setAttribute('data-overlay', pageNum);
+      overlay.width = canvas.width;
+      overlay.height = canvas.height;
+      overlay.style.cssText = 'position:absolute;top:0;left:0;width:' + Math.round(canvas.width / (window.devicePixelRatio || 1)) + 'px;height:100%;cursor:crosshair;';
+      wrap.style.position = 'relative';
+      wrap.appendChild(overlay);
+      return overlay;
     }
 
     async function renderAllPages() {
@@ -2009,13 +2102,80 @@ async function renderPdfWithPdfJs(buf) {
         var ctx = canvas.getContext('2d');
         await page.render({ canvasContext: ctx, viewport: viewport }).promise;
         var wrap = document.createElement('div');
+        wrap.style.position = 'relative';
         wrap.appendChild(canvas);
         pagesContainer.appendChild(wrap);
-        pageCanvases.push({ element: wrap, pageNum: i });
+        pageCanvases.push({ element: wrap, canvas: canvas, pageNum: i, viewport: viewport });
       }
+      renderAnnotations();
       updatePageInfo();
     }
 
+    function renderAnnotations() {
+      Object.keys(annotations).forEach(function(key) {
+        var ann = annotations[key];
+        var pageData = pageCanvases[ann.pageNum - 1];
+        if (!pageData) return;
+        var overlay = pageData.element.querySelector('[data-overlay="' + ann.pageNum + '"]');
+        if (!overlay) overlay = createPageOverlay(ann.pageNum);
+        if (!overlay) return;
+        var ctx = overlay.getContext('2d');
+        if (ann.type === 'highlight') {
+          ctx.fillStyle = ann.color + '66';
+          ctx.fillRect(ann.x, ann.y, ann.w, ann.h);
+        } else if (ann.type === 'rect') {
+          ctx.strokeStyle = ann.color;
+          ctx.lineWidth = 2;
+          ctx.strokeRect(ann.x, ann.y, ann.w, ann.h);
+        } else if (ann.type === 'underline') {
+          ctx.strokeStyle = ann.color;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(ann.x, ann.y);
+          ctx.lineTo(ann.x + ann.w, ann.y);
+          ctx.stroke();
+        } else if (ann.type === 'draw' && ann.points) {
+          ctx.strokeStyle = ann.color;
+          ctx.lineWidth = ann.width || 2;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.beginPath();
+          ann.points.forEach(function(p, pi) {
+            if (pi === 0) ctx.moveTo(p.x, p.y);
+            else ctx.lineTo(p.x, p.y);
+          });
+          ctx.stroke();
+        }
+      });
+      Object.keys(notes).forEach(function(key) {
+        var note = notes[key];
+        var pageData = pageCanvases[note.pageNum - 1];
+        if (!pageData) return;
+        var wrap = pageData.element;
+        var marker = wrap.querySelector('.pdf-note-marker');
+        if (marker) marker.remove();
+        var m = document.createElement('div');
+        m.className = 'pdf-note-marker';
+        m.title = note.text;
+        m.style.cssText = 'position:absolute;top:' + (note.y || 10) + 'px;right:10px;width:24px;height:24px;background:#FF9800;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;cursor:pointer;z-index:10;box-shadow:0 1px 3px rgba(0,0,0,0.3);';
+        m.textContent = '📝';
+        (function(nk) {
+          m.addEventListener('click', function() {
+            var txt = prompt('便签内容:', notes[nk].text || '');
+            if (txt !== null) { notes[nk].text = txt; m.title = txt; }
+          });
+        })(key);
+        wrap.appendChild(m);
+      });
+    }
+
+    document.getElementById('pdfPageInput').addEventListener('change', function() {
+      var p = parseInt(this.value);
+      if (p >= 1 && p <= totalPages) {
+        var target = pageCanvases[p - 1];
+        if (target) scrollContainer.scrollTo({ top: target.element.offsetTop - 10, behavior: 'smooth' });
+      }
+    });
     document.getElementById('pdfPrev').addEventListener('click', function() {
       if (currentPage > 1) {
         var target = pageCanvases[currentPage - 2];
@@ -2030,24 +2190,150 @@ async function renderPdfWithPdfJs(buf) {
     });
     document.getElementById('pdfZoomIn').addEventListener('click', function() {
       currentScale = Math.min(currentScale * 1.25, 5);
-      renderAllPages();
+      renderAllPages().then(renderThumbnails);
     });
     document.getElementById('pdfZoomOut').addEventListener('click', function() {
       currentScale = Math.max(currentScale / 1.25, 0.25);
-      renderAllPages();
+      renderAllPages().then(renderThumbnails);
     });
     document.getElementById('pdfFitWidth').addEventListener('click', function() {
       currentScale = scrollContainer.clientWidth / (baseWidth / currentScale) * currentScale / (window.devicePixelRatio || 1);
-      renderAllPages();
+      renderAllPages().then(renderThumbnails);
+    });
+    document.getElementById('pdfFitPage').addEventListener('click', function() {
+      var page1 = pageCanvases[0];
+      if (!page1) return;
+      var cw = scrollContainer.clientWidth - 24;
+      var ch = scrollContainer.clientHeight - 24;
+      var vp = page1.viewport;
+      var scaleW = cw / (vp.width / (window.devicePixelRatio || 1));
+      var scaleH = ch / (vp.height / (window.devicePixelRatio || 1));
+      currentScale = Math.min(scaleW, scaleH);
+      renderAllPages().then(renderThumbnails);
+    });
+    document.getElementById('pdfThumbs').addEventListener('click', function() {
+      showThumbs = !showThumbs;
+      thumbPanel.style.display = showThumbs ? 'flex' : 'none';
+      this.style.background = showThumbs ? 'var(--primary)' : '';
+      this.style.color = showThumbs ? '#fff' : '';
     });
     document.getElementById('pdfClose').addEventListener('click', function() {
       wrapper.remove();
       clearDocument();
     });
 
-    scrollContainer.addEventListener('scroll', updatePageInfo);
+    function setTool(tool) {
+      activeTool = (activeTool === tool) ? 'none' : tool;
+      ['pdfToolHighlight','pdfToolDraw','pdfToolRect','pdfToolUnderline','pdfToolNote'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.style.background = '';
+      });
+      if (activeTool !== 'none') {
+        var map = { highlight: 'pdfToolHighlight', draw: 'pdfToolDraw', rect: 'pdfToolRect', underline: 'pdfToolUnderline', note: 'pdfToolNote' };
+        var el = document.getElementById(map[activeTool]);
+        if (el) el.style.background = 'var(--primary)';
+      }
+      pagesContainer.style.cursor = activeTool !== 'none' ? 'crosshair' : '';
+    }
+    document.getElementById('pdfToolHighlight').addEventListener('click', function() { setTool('highlight'); });
+    document.getElementById('pdfToolDraw').addEventListener('click', function() { setTool('draw'); });
+    document.getElementById('pdfToolRect').addEventListener('click', function() { setTool('rect'); });
+    document.getElementById('pdfToolUnderline').addEventListener('click', function() { setTool('underline'); });
+    document.getElementById('pdfToolNote').addEventListener('click', function() { setTool('note'); });
+    document.getElementById('pdfDrawColor').addEventListener('change', function() { drawColor = this.value; });
+    document.getElementById('pdfToolEraser').addEventListener('click', function() {
+      Object.keys(annotations).forEach(function(k) {
+        if (annotations[k].pageNum === currentPage) delete annotations[k];
+      });
+      Object.keys(notes).forEach(function(k) {
+        if (notes[k].pageNum === currentPage) delete notes[k];
+      });
+      var pageData = pageCanvases[currentPage - 1];
+      if (pageData) {
+        var overlay = pageData.element.querySelector('[data-overlay="' + currentPage + '"]');
+        if (overlay) { var ctx = overlay.getContext('2d'); ctx.clearRect(0, 0, overlay.width, overlay.height); }
+        var marker = pageData.element.querySelector('.pdf-note-marker');
+        if (marker) marker.remove();
+      }
+    });
 
+    var drawingState = null;
+    pagesContainer.addEventListener('mousedown', function(e) {
+      if (activeTool === 'none') return;
+      if (activeTool === 'note') {
+        var pageData = pageCanvases[currentPage - 1];
+        if (!pageData) return;
+        var rect = pageData.canvas.getBoundingClientRect();
+        var scaleRatio = pageData.canvas.width / rect.width;
+        var x = (e.clientX - rect.left) * scaleRatio;
+        var y = (e.clientY - rect.top) * scaleRatio;
+        var text = prompt('输入便签内容:');
+        if (!text) return;
+        var key = 'note_' + Date.now();
+        notes[key] = { pageNum: currentPage, x: x, y: y, text: text };
+        renderAnnotations();
+        return;
+      }
+      var pageData = pageCanvases[currentPage - 1];
+      if (!pageData) return;
+      var rect = pageData.canvas.getBoundingClientRect();
+      var scaleRatio = pageData.canvas.width / rect.width;
+      var x = (e.clientX - rect.left) * scaleRatio;
+      var y = (e.clientY - rect.top) * scaleRatio;
+      drawingState = { startX: x, startY: y, points: [{ x: x, y: y }] };
+    });
+    pagesContainer.addEventListener('mousemove', function(e) {
+      if (!drawingState || activeTool === 'none' || activeTool === 'note') return;
+      var pageData = pageCanvases[currentPage - 1];
+      if (!pageData) return;
+      var rect = pageData.canvas.getBoundingClientRect();
+      var scaleRatio = pageData.canvas.width / rect.width;
+      var x = (e.clientX - rect.left) * scaleRatio;
+      var y = (e.clientY - rect.top) * scaleRatio;
+      drawingState.points.push({ x: x, y: y });
+      if (activeTool === 'draw' || activeTool === 'underline') {
+        var overlay = pageData.element.querySelector('[data-overlay="' + currentPage + '"]');
+        if (!overlay) overlay = createPageOverlay(currentPage);
+        if (!overlay) return;
+        var ctx = overlay.getContext('2d');
+        var pts = drawingState.points;
+        if (pts.length >= 2) {
+          ctx.strokeStyle = drawColor;
+          ctx.lineWidth = activeTool === 'underline' ? 3 : 2;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(pts[pts.length - 2].x, pts[pts.length - 2].y);
+          ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+          ctx.stroke();
+        }
+      }
+    });
+    pagesContainer.addEventListener('mouseup', function(e) {
+      if (!drawingState || activeTool === 'none' || activeTool === 'note') { drawingState = null; return; }
+      var pageData = pageCanvases[currentPage - 1];
+      if (!pageData) { drawingState = null; return; }
+      var rect = pageData.canvas.getBoundingClientRect();
+      var scaleRatio = pageData.canvas.width / rect.width;
+      var x = (e.clientX - rect.left) * scaleRatio;
+      var y = (e.clientY - rect.top) * scaleRatio;
+      var key = 'ann_' + Date.now();
+      var sx = drawingState.startX, sy = drawingState.startY;
+      if (activeTool === 'highlight') {
+        annotations[key] = { type: 'highlight', pageNum: currentPage, x: Math.min(sx, x), y: Math.min(sy, y), w: Math.abs(x - sx), h: Math.abs(y - sy), color: drawColor };
+      } else if (activeTool === 'rect') {
+        annotations[key] = { type: 'rect', pageNum: currentPage, x: Math.min(sx, x), y: Math.min(sy, y), w: Math.abs(x - sx), h: Math.abs(y - sy), color: drawColor };
+      } else if (activeTool === 'underline') {
+        annotations[key] = { type: 'underline', pageNum: currentPage, x: Math.min(sx, x), y: y, w: Math.abs(x - sx), h: 0, color: drawColor };
+      } else if (activeTool === 'draw') {
+        annotations[key] = { type: 'draw', pageNum: currentPage, points: drawingState.points, color: drawColor, width: 2 };
+      }
+      drawingState = null;
+      renderAnnotations();
+    });
+
+    scrollContainer.addEventListener('scroll', updatePageInfo);
     await renderAllPages();
+    await renderThumbnails();
     hideLoading();
   } catch (e) {
     console.error('PDF render error:', e);
