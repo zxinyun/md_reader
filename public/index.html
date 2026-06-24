@@ -691,6 +691,7 @@ body.auto .search-active { background: #ff6b35; color: #fff; }
       <button class="theme-opt" id="restoreBtn" style="background:var(--primary);color:#fff;padding:10px 24px;font-size:15px">📖 恢复上次阅读</button>
     </div>
     <div id="buildId" style="margin-top:8px;font-size:10px;color:var(--text-secondary);opacity:0.5" data-build="20260619-0500">BUILD: dev</div>
+    <div id="jsStatus" style="margin-top:4px;font-size:9px;color:#e74c3c;opacity:0.7">JS: pending...</div>
   </div>
   <div class="loading" id="loadingIndicator" style="display:none">
     <div class="spinner" id="loadingSpinner"></div>
@@ -793,6 +794,9 @@ body.auto .search-active { background: #ff6b35; color: #fff; }
 
 <script src="file-api.js"></script>
 <script>
+// JS diagnostic: update visible indicator immediately
+(function(){try{var e=document.getElementById('jsStatus');if(e){e.textContent='JS: running';e.style.color='#f0ad4e';}}catch(ex){}})();
+
 const __BUILD_ID__ = '20260619-0500';
 const __APP_VERSION__ = '__APP_VERSION__';
 const __FEATURES__ = { multiFile: true, imageSupport: true, debugPanel: true };
@@ -6110,6 +6114,15 @@ $('tbScrollDown').addEventListener('click', () => scrollContentTo('bottom'));
 
 // ===== Menu: show action sheet =====
 $('menuBtn').addEventListener('click', showMenuSheet);
+
+// JS diagnostic: event handlers attached
+(function(){try{var e=document.getElementById('jsStatus');if(e){e.textContent='JS: handlers attached';e.style.color='#5cb85c';}}catch(ex){}})();
+
+// Global error diagnostics
+window.addEventListener('error', function(e) {
+  try{var el=document.getElementById('jsStatus');if(el){el.textContent='JS: ERROR '+e.message;el.style.color='#e74c3c';}}catch(ex){}
+  _d && _d('[GLOBAL_ERROR] ' + e.message + ' at ' + e.filename + ':' + e.lineno);
+});
 
 function showMenuSheet() {
   const hasContent = !!state.fileContent;
