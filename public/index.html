@@ -1966,7 +1966,7 @@ async function renderPdfWithPdfJs(buf) {
     var totalPages = pdf.numPages;
     var baseWidth = 0;
     var thumbScale = 0.12;
-    var showThumbs = true;
+    var showThumbs = false;
     var annotations = {};
     var notes = {};
     var activeTool = 'none';
@@ -1985,34 +1985,41 @@ async function renderPdfWithPdfJs(buf) {
     var row1 = document.createElement('div');
     row1.style.cssText = 'display:flex;align-items:center;gap:4px;padding:6px 8px;overflow-x:auto;-webkit-overflow-scrolling:touch;';
     row1.innerHTML = [
-      '<button id="pdfThumbs" title="缩略图" style="' + btnStyle + 'font-size:16px;">☰</button>',
       '<button id="pdfPrev" title="上一页" style="' + btnStyle + 'font-size:16px;">◀</button>',
-      '<input id="pdfPageInput" type="number" min="1" max="' + totalPages + '" value="1" style="width:44px;text-align:center;padding:4px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;flex-shrink:0;" />',
+      '<input id="pdfPageInput" type="number" min="1" max="' + totalPages + '" value="1" style="width:40px;text-align:center;padding:4px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;flex-shrink:0;" />',
       '<span id="pdfPageInfo" style="font-size:13px;color:var(--text-secondary);flex-shrink:0;">/' + totalPages + '</span>',
       '<button id="pdfNext" title="下一页" style="' + btnStyle + 'font-size:16px;">▶</button>',
       '<div style="width:1px;height:20px;background:var(--border);margin:0 2px;flex-shrink:0;"></div>',
       '<button id="pdfZoomOut" title="缩小" style="' + btnStyle + 'font-size:16px;">−</button>',
       '<span id="pdfZoomLevel" style="font-size:12px;color:var(--text-secondary);min-width:36px;text-align:center;flex-shrink:0;">100%</span>',
       '<button id="pdfZoomIn" title="放大" style="' + btnStyle + 'font-size:16px;">+</button>',
-      '<button id="pdfFitWidth" title="适合宽度" style="' + btnStyle + '">宽度</button>',
-      '<button id="pdfFitPage" title="适合页面" style="' + btnStyle + '">页面</button>',
       '<div style="width:1px;height:20px;background:var(--border);margin:0 2px;flex-shrink:0;"></div>',
-      '<button id="pdfToolBtn" title="标注工具" style="' + btnStyle + 'font-size:16px;">✏️</button>',
-      '<button id="pdfSave" title="保存" style="' + btnStyle + 'font-size:14px;">💾</button>',
-      '<button id="pdfRotateL" title="向左旋转" style="' + btnStyle + 'font-size:14px;">↺</button>',
-      '<button id="pdfRotateR" title="向右旋转" style="' + btnStyle + 'font-size:14px;">↻</button>',
       '<button id="pdfClose" title="关闭" style="' + btnStyle + 'font-size:14px;color:#f44336;">✕</button>'
     ].join('');
     toolbar.appendChild(row1);
 
     var row2 = document.createElement('div');
-    row2.id = 'pdfAnnoBar';
-    row2.style.cssText = 'display:none;align-items:center;gap:4px;padding:4px 8px 6px;border-top:1px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch;';
+    row2.style.cssText = 'display:flex;align-items:center;gap:4px;padding:2px 8px 4px;overflow-x:auto;-webkit-overflow-scrolling:touch;';
     row2.innerHTML = [
-      '<button id="pdfToolHighlight" title="高亮" style="' + btnStyle + 'font-size:15px;">🖍</button>',
-      '<button id="pdfToolDraw" title="画笔" style="' + btnStyle + 'font-size:15px;">✏</button>',
-      '<button id="pdfToolRect" title="矩形" style="' + btnStyle + 'font-size:15px;">▭</button>',
-      '<button id="pdfToolUnderline" title="下划线" style="' + btnStyle + 'font-size:15px;font-weight:bold;">U̲</button>',
+      '<button id="pdfThumbs" title="缩略图" style="' + btnStyle + 'font-size:13px;">☰ 缩略图</button>',
+      '<button id="pdfFitWidth" title="适合宽度" style="' + btnStyle + 'font-size:12px;">宽度</button>',
+      '<button id="pdfFitPage" title="适合页面" style="' + btnStyle + 'font-size:12px;">页面</button>',
+      '<div style="width:1px;height:18px;background:var(--border);margin:0 2px;flex-shrink:0;"></div>',
+      '<button id="pdfToolBtn" title="标注工具" style="' + btnStyle + 'font-size:14px;">✏️</button>',
+      '<button id="pdfRotateL" title="向左旋转" style="' + btnStyle + 'font-size:13px;">↺ 旋转</button>',
+      '<button id="pdfRotateR" title="向右旋转" style="' + btnStyle + 'font-size:13px;">↻ 旋转</button>',
+      '<button id="pdfSave" title="保存" style="' + btnStyle + 'font-size:13px;">💾 保存</button>'
+    ].join('');
+    toolbar.appendChild(row2);
+
+    var row3 = document.createElement('div');
+    row3.id = 'pdfAnnoBar';
+    row3.style.cssText = 'display:none;align-items:center;gap:4px;padding:2px 8px 6px;border-top:1px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch;';
+    row3.innerHTML = [
+      '<button id="pdfToolHighlight" title="高亮" style="' + btnStyle + 'font-size:14px;">🖍 高亮</button>',
+      '<button id="pdfToolDraw" title="画笔" style="' + btnStyle + 'font-size:14px;">✏ 画笔</button>',
+      '<button id="pdfToolRect" title="矩形" style="' + btnStyle + 'font-size:14px;">▭ 矩形</button>',
+      '<button id="pdfToolUnderline" title="下划线" style="' + btnStyle + 'font-size:13px;font-weight:bold;">U̲ 下划线</button>',
       '<select id="pdfDrawColor" style="padding:4px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:12px;flex-shrink:0;">' +
         '<option value="#FFEB3B">黄色</option>' +
         '<option value="#FF5722">红色</option>' +
@@ -2020,10 +2027,10 @@ async function renderPdfWithPdfJs(buf) {
         '<option value="#2196F3">蓝色</option>' +
         '<option value="#FF9800">橙色</option>' +
       '</select>',
-      '<button id="pdfToolNote" title="便签" style="' + btnStyle + 'font-size:15px;">📝</button>',
-      '<button id="pdfToolEraser" title="清除标注" style="' + btnStyle + 'font-size:14px;">🗑</button>'
+      '<button id="pdfToolNote" title="便签" style="' + btnStyle + 'font-size:14px;">📝 便签</button>',
+      '<button id="pdfToolEraser" title="清除标注" style="' + btnStyle + 'font-size:13px;">🗑 清除</button>'
     ].join('');
-    toolbar.appendChild(row2);
+    toolbar.appendChild(row3);
     wrapper.appendChild(toolbar);
 
     var body = document.createElement('div');
@@ -2031,7 +2038,7 @@ async function renderPdfWithPdfJs(buf) {
 
     var thumbPanel = document.createElement('div');
     thumbPanel.id = 'pdfThumbPanel';
-    thumbPanel.style.cssText = 'width:140px;overflow-y:auto;border-right:1px solid var(--border);background:var(--bg-card);flex-shrink:0;padding:8px;display:flex;flex-direction:column;gap:6px;';
+    thumbPanel.style.cssText = 'width:140px;overflow-y:auto;border-right:1px solid var(--border);background:var(--bg-card);flex-shrink:0;padding:8px;display:none;flex-direction:column;gap:6px;';
     body.appendChild(thumbPanel);
 
     var scrollContainer = document.createElement('div');
@@ -2480,6 +2487,24 @@ async function renderPdfWithPdfJs(buf) {
         dragState = null;
         pagesContainer.style.cursor = activeTool !== 'none' ? 'crosshair' : '';
       }
+    });
+
+    pagesContainer.addEventListener('touchstart', function(e) {
+      if (activeTool !== 'none') return;
+      if (e.touches.length !== 1) return;
+      if (currentScale <= 1 && currentRotation === 0) return;
+      dragState = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, scrollLeft: scrollContainer.scrollLeft, scrollTop: scrollContainer.scrollTop };
+    }, { passive: true });
+    pagesContainer.addEventListener('touchmove', function(e) {
+      if (!dragState || e.touches.length !== 1) return;
+      e.preventDefault();
+      var dx = e.touches[0].clientX - dragState.startX;
+      var dy = e.touches[0].clientY - dragState.startY;
+      scrollContainer.scrollLeft = dragState.scrollLeft - dx;
+      scrollContainer.scrollTop = dragState.scrollTop - dy;
+    }, { passive: false });
+    pagesContainer.addEventListener('touchend', function() {
+      if (dragState) dragState = null;
     });
 
     scrollContainer.addEventListener('scroll', updatePageInfo);
