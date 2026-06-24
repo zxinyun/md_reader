@@ -86,7 +86,7 @@ jobs:
             fs.writeFileSync('src-tauri/Cargo.toml', cargo);
             // index.html — replace __APP_VERSION__ placeholder
             let html = fs.readFileSync('public/index.html', 'utf8');
-            html = html.replace(/__APP_VERSION__/g, '$VERSION');
+            html = html.replace('___APP_VER___', '$VERSION');
             fs.writeFileSync('public/index.html', html);
             // android/app/build.gradle — sync versionName + versionCode (skip if fallback 0.0.0)
             if ('$VERSION' !== '0.0.0') {
@@ -170,7 +170,7 @@ jobs:
             cargo = cargo.replace(/^version = \".*\"/m, 'version = \"$VERSION\"');
             fs.writeFileSync('src-tauri/Cargo.toml', cargo);
             let html = fs.readFileSync('public/index.html', 'utf8');
-            html = html.replace(/__APP_VERSION__/g, '$VERSION');
+            html = html.replace('___APP_VER___', '$VERSION');
             fs.writeFileSync('public/index.html', html);
             // android/app/build.gradle (skip if fallback 0.0.0)
             if ('$VERSION' !== '0.0.0') {
@@ -264,7 +264,7 @@ jobs:
             pkg.version = '$VERSION';
             fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
             let html = fs.readFileSync('public/index.html', 'utf8');
-            html = html.replace(/__APP_VERSION__/g, '$VERSION');
+            html = html.replace('___APP_VER___', '$VERSION');
             fs.writeFileSync('public/index.html', html);
           "
 

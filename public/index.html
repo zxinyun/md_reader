@@ -798,7 +798,7 @@ body.auto .search-active { background: #ff6b35; color: #fff; }
 (function(){try{var e=document.getElementById('jsStatus');if(e){e.textContent='JS: running';e.style.color='#f0ad4e';}}catch(ex){}})();
 
 const __BUILD_ID__ = '20260619-0500';
-const __APP_VERSION__ = '__APP_VERSION__';
+const APP_VERSION = '___APP_VER___';
 const __FEATURES__ = { multiFile: true, imageSupport: true, debugPanel: true };
 // ===== Markdown Parser (standalone) =====
 const mdParser = (() => {
@@ -1159,7 +1159,7 @@ function showAboutDialog() {
   dialog.innerHTML = `
     <div style="font-size:40px;margin-bottom:8px">📖</div>
     <h2 style="margin:0 0 4px;font-size:18px">通用阅读器</h2>
-    <p style="margin:0 0 16px;font-size:13px;color:var(--text-secondary)">v${typeof __APP_VERSION__ !== 'undefined' && __APP_VERSION__ !== '__APP_VERSION__' ? __APP_VERSION__ : 'dev'}</p>
+    <p style="margin:0 0 16px;font-size:13px;color:var(--text-secondary)">v${typeof APP_VERSION !== 'undefined' && APP_VERSION !== '___APP_VER___' ? APP_VERSION : 'dev'}</p>
     <p style="margin:0 0 6px;font-size:14px">支持 MD / HTML / TXT / PDF /<br>Word / Excel / PPT / CSV / JSON / 代码</p>
     <p style="margin:8px 0 16px;font-size:12px;color:var(--text-secondary)">注：Word、Excel、PPT 仅限基础格式，复杂排版可能无法完整预览</p>
     <p style="margin:16px 0 20px;font-size:13px;color:var(--text-secondary)">版权作者：洋芋哥</p>
@@ -6408,7 +6408,7 @@ function _clearDiag() { _diag = []; var el = document.getElementById('debugPanel
 _d('[STARTUP] BUILD=' + __BUILD_ID__);
 // Update buildId display with app version
 try {
-  var _ver = (typeof __APP_VERSION__ !== 'undefined' && __APP_VERSION__ !== '__APP_VERSION__') ? __APP_VERSION__ : 'dev';
+  var _ver = (typeof APP_VERSION !== 'undefined' && APP_VERSION !== '___APP_VER___') ? APP_VERSION : 'dev';
   var _buildEl = document.getElementById('buildId');
   if (_buildEl) _buildEl.textContent = 'BUILD: ' + _ver;
 } catch(e) {}
