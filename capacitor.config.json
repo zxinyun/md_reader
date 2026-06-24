@@ -3,6 +3,7 @@
   "appName": "通用阅读器",
   "webDir": "public",
   "server": {
+    "androidScheme": "https",
     "allowNavigation": []
   }
 }
