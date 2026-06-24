@@ -176,13 +176,15 @@ on:
       let html = fs.readFileSync('public/index.html', 'utf8');
       html = html.replace(/__APP_VERSION__/g, '$VERSION');
       fs.writeFileSync('public/index.html', html);
-      // android/app/build.gradle — 同步 versionName + 自动计算 versionCode
-      let gradle = fs.readFileSync('android/app/build.gradle', 'utf8');
-      gradle = gradle.replace(/versionName \".*\"/, 'versionName \"$VERSION\"');
-      const parts = '$VERSION'.split('.').map(Number);
-      const vc = parts[0]*1000000 + (parts[1]||0)*1000 + (parts[2]||0);
-      gradle = gradle.replace(/versionCode \d+/, 'versionCode ' + vc);
-      fs.writeFileSync('android/app/build.gradle', gradle);
+      // android/app/build.gradle — 同步 versionName + 自动计算 versionCode（跳过 0.0.0 回退，避免 versionCode=0）
+      if ('$VERSION' !== '0.0.0') {
+        let gradle = fs.readFileSync('android/app/build.gradle', 'utf8');
+        gradle = gradle.replace(/versionName \".*\"/, 'versionName \"$VERSION\"');
+        const parts = '$VERSION'.split('.').map(Number);
+        const vc = parts[0]*1000000 + (parts[1]||0)*1000 + (parts[2]||0);
+        gradle = gradle.replace(/versionCode \d+/, 'versionCode ' + vc);
+        fs.writeFileSync('android/app/build.gradle', gradle);
+      }
     "
 ```
 
