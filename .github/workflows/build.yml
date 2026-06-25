@@ -88,6 +88,17 @@ jobs:
             let html = fs.readFileSync('public/index.html', 'utf8');
             html = html.replace(/__APP_VERSION__/g, '$VERSION');
             fs.writeFileSync('public/index.html', html);
+            // capacitor.config.json
+            const cap = JSON.parse(fs.readFileSync('capacitor.config.json','utf8'));
+            cap.versionName = '$VERSION';
+            const parts = '$VERSION'.split('.').map(Number);
+            cap.versionCode = (parts[0]||0)*10000 + (parts[1]||0)*100 + (parts[2]||0);
+            fs.writeFileSync('capacitor.config.json', JSON.stringify(cap, null, 2) + '\n');
+            // android build.gradle
+            let gradle = fs.readFileSync('android/app/build.gradle','utf8');
+            gradle = gradle.replace(/versionCode \d+/, 'versionCode ' + cap.versionCode);
+            gradle = gradle.replace(/versionName \"[^\"]*\"/, 'versionName \"' + '$VERSION' + '\"');
+            fs.writeFileSync('android/app/build.gradle', gradle);
           "
 
       - name: Setup Node.js
@@ -163,6 +174,17 @@ jobs:
             let html = fs.readFileSync('public/index.html', 'utf8');
             html = html.replace(/__APP_VERSION__/g, '$VERSION');
             fs.writeFileSync('public/index.html', html);
+            // capacitor.config.json
+            const cap = JSON.parse(fs.readFileSync('capacitor.config.json','utf8'));
+            cap.versionName = '$VERSION';
+            const parts = '$VERSION'.split('.').map(Number);
+            cap.versionCode = (parts[0]||0)*10000 + (parts[1]||0)*100 + (parts[2]||0);
+            fs.writeFileSync('capacitor.config.json', JSON.stringify(cap, null, 2) + '\n');
+            // android build.gradle
+            let gradle = fs.readFileSync('android/app/build.gradle','utf8');
+            gradle = gradle.replace(/versionCode \d+/, 'versionCode ' + cap.versionCode);
+            gradle = gradle.replace(/versionName \"[^\"]*\"/, 'versionName \"' + '$VERSION' + '\"');
+            fs.writeFileSync('android/app/build.gradle', gradle);
           "
 
       - name: Setup Node.js
@@ -248,6 +270,12 @@ jobs:
             let html = fs.readFileSync('public/index.html', 'utf8');
             html = html.replace(/__APP_VERSION__/g, '$VERSION');
             fs.writeFileSync('public/index.html', html);
+            // capacitor.config.json
+            const cap = JSON.parse(fs.readFileSync('capacitor.config.json','utf8'));
+            cap.versionName = '$VERSION';
+            const parts = '$VERSION'.split('.').map(Number);
+            cap.versionCode = (parts[0]||0)*10000 + (parts[1]||0)*100 + (parts[2]||0);
+            fs.writeFileSync('capacitor.config.json', JSON.stringify(cap, null, 2) + '\n');
           "
 
       - name: Setup Node.js
@@ -269,12 +297,15 @@ jobs:
 
       - name: Build iOS
         run: |
+          VERSION="${{ steps.ver.outputs.version }}"
           cd ios/App
           xcodebuild -project App.xcodeproj \
             -scheme App \
             -configuration Release \
             -sdk iphoneos \
             -archivePath $PWD/build/App.xcarchive \
+            MARKETING_VERSION=$VERSION \
+            CURRENT_PROJECT_VERSION=$VERSION \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             archive
