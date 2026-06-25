@@ -32,13 +32,12 @@ jobs:
             args: '--target aarch64-unknown-linux-gnu'
             artifact-name: linux-arm64-bundles
             artifact-path: |
-              src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
               src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/deb/*.deb
           - platform: macos-latest
-            args: '--target x86_64-apple-darwin'
+            args: ''
             artifact-name: macos-bundle
             artifact-path: |
-              src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
+              src-tauri/target/release/bundle/dmg/*.dmg
           - platform: windows-latest
             args: ''
             artifact-name: windows-bundles
@@ -112,8 +111,21 @@ jobs:
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-      - name: Install Linux system deps
-        if: runner.os == 'Linux'
+      - name: Install Linux ARM64 cross-compile deps
+        if: matrix.platform == 'ubuntu-24.04-arm'
+        run: |
+          sudo dpkg --add-architecture arm64
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc-aarch64-linux-gnu \
+            g++-aarch64-linux-gnu \
+            libwebkit2gtk-4.1-dev:arm64 \
+            libappindicator3-dev:arm64 \
+            librsvg2-dev:arm64 \
+            patchelf
+
+      - name: Install Linux x64 system deps
+        if: runner.os == 'Linux' && matrix.platform != 'ubuntu-24.04-arm'
         run: |
           sudo apt-get update
           sudo apt-get install -y \

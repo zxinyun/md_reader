@@ -1025,6 +1025,7 @@ const htmlFrame = $('htmlFrame');
 const fileInput = $('fileInput');
 const progressFill = $('progressFill');
 const toast = $('toast');
+const actionStrip = $('actionStrip');
 const sheetOverlay = $('sheetOverlay');
 const sheet = $('sheet');
 const sheetBody = $('sheetBody');
@@ -1087,8 +1088,8 @@ const _libMap = {
   'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js': 'lib/xlsx.full.min.js',
   'https://cdn.jsdelivr.net/npm/docx-preview@0.3.0/dist/docx-preview.min.js': 'lib/docx-preview.min.js',
   'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js': 'lib/jszip.min.js',
-  'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js': 'lib/katex.min.js',
-  'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css': 'lib/katex.min.css',
+  'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js': 'lib/katex.min.js',
+  'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css': 'lib/katex.min.css',
   'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css': 'lib/katex-0.16.11.min.css',
   'https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js': 'lib/highlight.min.js',
   'https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github.min.css': 'lib/highlight-github.min.css',
@@ -2961,25 +2962,6 @@ async function renderXlsx(arrayBuffer) {
       });
     });
 
-    // Helper: show cell content in a sheet
-    function showCellContent(text) {
-      const html = `
-        <div class="sheet-handle"></div>
-        <div class="sheet-title">📋 单元格内容</div>
-        <div class="sheet-group">
-          <div style="background:var(--bg);padding:14px;border-radius:var(--radius-sm);font-size:14px;line-height:1.6;word-break:break-all;white-space:pre-wrap;max-height:50vh;overflow-y:auto">${escapeHtml(text)}</div>
-          <button class="theme-opt" id="cellCopyBtn" style="width:100%;margin-top:8px">📋 复制此内容</button>
-        </div>`;
-      openSheet(html);
-      setTimeout(() => {
-        const btn = document.getElementById('cellCopyBtn');
-        if (btn) btn.addEventListener('click', () => {
-          closeSheet();
-          navigator.clipboard.writeText(text).then(() => showToast('已复制')).catch(() => fallbackCopy(text));
-        });
-      }, 50);
-    }
-
     // Merge-aware rendering for large sheets
     function renderSheetProgressively(sheetIdx) {
       return new Promise((resolve) => {
@@ -3689,8 +3671,8 @@ function loadHighlightTheme() {
 
 async function ensureKaTeX() {
   if (typeof katex === 'undefined') {
-    await loadScript('https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js');
-    await loadCSS('https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css');
+    await loadScript('https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js');
+    await loadCSS('https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css');
   }
 }
 
@@ -4361,7 +4343,6 @@ async function getHighlightStyle() {
 }
 
 // ===== Image Export (html2canvas) =====
-let _html2canvasLoaded = false;
 async function ensureHtml2Canvas() {
   if (typeof html2canvas === 'undefined') {
     await loadScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js');
@@ -4556,7 +4537,7 @@ const editorTextarea = $('mdEditorTextarea');
 let editTimer = null;
 let editorTab = 'edit';
 
-function toggleEditor() {
+async function toggleEditor() {
   if (state.fileType !== 'md') { showToast('仅 Markdown 文件支持编辑'); return; }
   if (editor.style.display !== 'none') {
     state.fileContent = editorTextarea.value;
@@ -4564,7 +4545,7 @@ function toggleEditor() {
     mdContent.style.display = 'block';
     mdContent.innerHTML = mdParser(state.fileContent);
     setupCopyButtons();
-    enhanceMdContent();
+    await enhanceMdContent();
     buildMdOutline();
     reapplyZoom();
     actionStrip.style.display = '';
@@ -4601,11 +4582,11 @@ function switchEditorTab(tab) {
   }
 }
 
-function renderEditorPreview() {
+async function renderEditorPreview() {
   const text = editorTextarea.value;
   mdContent.innerHTML = mdParser(text);
   setupCopyButtons();
-  enhanceMdContent();
+  await enhanceMdContent();
   buildMdOutline();
   reapplyZoom();
   $('mdEditorStatus').textContent = `已渲染 (${text.length.toLocaleString()} 字符)`;
@@ -5007,13 +4988,6 @@ function reapplyZoom() {
   if (htmlFrame.style.display === 'block' && (htmlFrame.src || htmlFrame.srcdoc)) {
     htmlFrame.style.transform = z === 1 ? '' : `scale(${z})`;
     htmlFrame.style.transformOrigin = 'top left';
-    return;
-  }
-  // pdf.js canvas container (mobile)
-  var pdfContainer = document.getElementById('pdfRenderContainer');
-  if (pdfContainer && pdfContainer.style.display === 'block') {
-    pdfContainer.style.transform = z === 1 ? '' : `scale(${z})`;
-    pdfContainer.style.transformOrigin = 'top left';
     return;
   }
   // mdContent visible (markdown, text, code, office docs)
@@ -5984,6 +5958,24 @@ function closeSheet() {
   sheetOverlay.classList.remove('open');
   sheet.classList.remove('open');
   document.body.style.overflow = '';
+}
+
+function showCellContent(text) {
+  const html = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">📋 单元格内容</div>
+    <div class="sheet-group">
+      <div style="background:var(--bg);padding:14px;border-radius:var(--radius-sm);font-size:14px;line-height:1.6;word-break:break-all;white-space:pre-wrap;max-height:50vh;overflow-y:auto">${escapeHtml(text)}</div>
+      <button class="theme-opt" id="cellCopyBtn" style="width:100%;margin-top:8px">📋 复制此内容</button>
+    </div>`;
+  openSheet(html);
+  setTimeout(() => {
+    const btn = document.getElementById('cellCopyBtn');
+    if (btn) btn.addEventListener('click', () => {
+      closeSheet();
+      navigator.clipboard.writeText(text).then(() => showToast('已复制')).catch(() => fallbackCopy(text));
+    });
+  }, 50);
 }
 
 sheetOverlay.addEventListener('click', closeSheet);

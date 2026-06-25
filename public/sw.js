@@ -1,7 +1,13 @@
-const CACHE = 'reader-v7';
+const CACHE = 'reader-v8';
 const PRECACHE = [
   'index.html',
-  'manifest.json'
+  'manifest.json',
+  'file-api.js',
+  'lib/highlight.min.js',
+  'lib/highlight-github.min.css',
+  'lib/highlight-github-dark.min.css',
+  'lib/katex.min.js',
+  'lib/katex.min.css'
 ];
 
 self.addEventListener('install', e => {
