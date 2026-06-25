@@ -1847,7 +1847,7 @@ function updateEditBtn() {
   $('actEdit').style.display = state.fileType === 'md' && editor.style.display === 'none' ? '' : 'none';
 }
 
-function renderContent() {
+async function renderContent() {
   showActionStrip(true);
   hideLoading();
   // Remove any XFO error div from previous URL attempt
@@ -1874,7 +1874,8 @@ function renderContent() {
     mdContent.style.display = 'block';
     mdContent.innerHTML = mdParser(state.fileContent);
     setupCopyButtons();
-    enhanceMdContent();
+    await new Promise(r => setTimeout(r, 0));
+    await enhanceMdContent();
     buildMdOutline();
     reapplyZoom();
   } else if (state.fileType === 'html') {
@@ -4678,21 +4679,20 @@ $('openBtn').addEventListener('click', async () => {
   for (const _fd of fds) {
     try {
       const _type = detectFileType(_fd.name);
-      const _binary = isBinaryType(_type);
-      const _content = await readFileBlob(_fd, _binary);
       const _fullPath = _fd._path || _fd.path || _fd.name;
       const _existing = state.importedFiles.findIndex(f => f.fullPath === _fullPath);
       if (_existing >= 0) {
-        state.importedFiles[_existing].content = _content;
         state.importedFiles[_existing].type = _type;
+        state.importedFiles[_existing]._fileRef = _fd;
+        state.importedFiles[_existing].content = null;
       } else {
-        state.importedFiles.push({ name: _fd.name, fullPath: _fullPath, content: _content, type: _type });
+        state.importedFiles.push({ name: _fd.name, fullPath: _fullPath, type: _type, _fileRef: _fd, content: null });
       }
       _count++;
-    } catch(e) { console.warn('读取失败:', _fd.name, e); }
+    } catch(e) { console.warn('注册失败:', _fd.name, e); }
   }
   if (_count) {
-    openImportedFile(state.importedFiles.length - 1);
+    await openImportedFile(state.importedFiles.length - 1);
     showToast(`已打开 ${_count} 个文件`);
   }
   } catch(err) { console.error('[openBtn] ERROR:', err); showToast('打开失败: ' + (err.message || err)); }
@@ -4825,39 +4825,52 @@ async function handleDropItems(dt) {
   
   if (!allFiles.length) { showToast('未找到支持的文件'); return; }
   
-  // Phase 3 (async): read all file contents
+  // Phase 3: register files as refs (lazy load content on open)
   let count = 0;
   for (const item of allFiles) {
     try {
       const type = detectFileType(item.name);
-      const binary = isBinaryType(type);
-      const content = await readFileBlob(item.file, binary);
       const existing = state.importedFiles.findIndex(f => f.fullPath === item.path);
       if (existing >= 0) {
-        state.importedFiles[existing].content = content;
         state.importedFiles[existing].type = type;
+        state.importedFiles[existing]._fileRef = item.file;
+        state.importedFiles[existing].content = null;
       } else {
-        state.importedFiles.push({ name: item.name, fullPath: item.path, content, type });
+        state.importedFiles.push({ name: item.name, fullPath: item.path, type, _fileRef: item.file, content: null });
       }
       count++;
-    } catch(e) { console.warn('读取失败:', item.name, e); }
+    } catch(e) { console.warn('注册失败:', item.name, e); }
   }
   
   if (count) {
-    openImportedFile(state.importedFiles.length - 1);
+    await openImportedFile(state.importedFiles.length - 1);
     showToast(`已导入 ${count} 个文件`);
   } else {
     showToast('未能读取任何文件');
   }
 }
 
-function openImportedFile(idx) {
+async function openImportedFile(idx) {
   try {
   const f = state.importedFiles[idx];
   if (!f) return;
-  if (f.content === null || f.content === undefined) { showToast('文件内容为空'); return; }
   activeOp.seq = ++_opSeq;
   activeOp.aborted = true;
+  // Lazy load: read content on demand
+  if ((f.content === null || f.content === undefined) && f._fileRef) {
+    showLoading('正在加载 ' + f.name + '...');
+    await new Promise(r => setTimeout(r, 0));
+    try {
+      const binary = isBinaryType(f.type);
+      f.content = await readFileBlob(f._fileRef, binary);
+    } catch(e) {
+      hideLoading();
+      showToast('读取文件失败: ' + (e.message || e));
+      return;
+    }
+    hideLoading();
+  }
+  if (f.content === null || f.content === undefined) { showToast('文件内容为空'); return; }
   let content = f.content;
   if (content instanceof Uint8Array) content = content.buffer;
   state.fileContent = content;
@@ -6158,7 +6171,18 @@ function showMenuSheet() {
         else if (act === 'outline') showWordOutline();
         else if (act === 'sheets') showSheetSwitcher();
         else if (act === 'url') browseUrl();
-        else if (act === 'open') FileAPI.pickFiles(ACCEPT_EXTS).then(async fds => { if (fds && fds.length) { for (const fd of fds) await loadFile(fd); } });
+        else if (act === 'open') FileAPI.pickFiles(ACCEPT_EXTS).then(async fds => {
+          if (!fds || !fds.length) return;
+          for (const _fd of fds) {
+            const _type = detectFileType(_fd.name);
+            const _fullPath = _fd._path || _fd.path || _fd.name;
+            const _existing = state.importedFiles.findIndex(f => f.fullPath === _fullPath);
+            if (_existing >= 0) { state.importedFiles[_existing].type = _type; state.importedFiles[_existing]._fileRef = _fd; state.importedFiles[_existing].content = null; }
+            else { state.importedFiles.push({ name: _fd.name, fullPath: _fullPath, type: _type, _fileRef: _fd, content: null }); }
+          }
+          await openImportedFile(state.importedFiles.length - 1);
+          showToast(`已打开 ${fds.length} 个文件`);
+        });
         else if (act === 'about') showAboutDialog();
         else if (act === 'debug') _toggleDiag();
       });
