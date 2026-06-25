@@ -1,0 +1,32 @@
+﻿node_modules/
+src-tauri/target/
+.DS_Store
+Thumbs.db
+src-tauri/.cargo/config.toml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build artifacts
+dist/
+build/
+*.log
+
+# Android
+android/app/build/
+android/.gradle/
+android/capacitor-cordova-android-plugins/build/
+
+# iOS
+ios/App/build/
+ios/App/Pods/
+
+# OS
+desktop.ini
+._*
+
+# Backup
+_backup/

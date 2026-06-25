@@ -1,0 +1,8 @@
+{
+  "appId": "com.reader.md",
+  "appName": "通用阅读器",
+  "webDir": "public",
+  "server": {
+    "allowNavigation": []
+  }
+}

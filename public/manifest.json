@@ -1,0 +1,25 @@
+{
+  "name": "通用阅读器",
+  "short_name": "阅读器",
+  "description": "Markdown & HTML 通用阅读器 - 手机友好",
+  "start_url": "index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f8f9fa",
+  "theme_color": "#1a1a2e",
+  "scope": "./",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%236c5ce7'/><text x='96' y='140' font-size='120' text-anchor='middle' fill='white'>📖</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='64' fill='%236c5ce7'/><text x='256' y='360' font-size='280' text-anchor='middle' fill='white'>📖</text></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

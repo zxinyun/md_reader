@@ -1,0 +1,355 @@
+name: Build
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号 (留空则使用 tag 名)'
+        required: false
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            args: ''
+            artifact-name: linux-amd64-bundles
+            artifact-path: |
+              src-tauri/target/release/bundle/appimage/*.AppImage
+              src-tauri/target/release/bundle/deb/*.deb
+          - platform: ubuntu-24.04-arm
+            args: '--target aarch64-unknown-linux-gnu'
+            artifact-name: linux-arm64-bundles
+            artifact-path: |
+              src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
+              src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/deb/*.deb
+          - platform: macos-latest
+            args: '--target x86_64-apple-darwin'
+            artifact-name: macos-bundle
+            artifact-path: |
+              src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
+          - platform: windows-latest
+            args: ''
+            artifact-name: windows-bundles
+            artifact-path: |
+              src-tauri/target/release/bundle/nsis/*.exe
+              src-tauri/target/release/bundle/msi/*.msi
+
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.version }}" ]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          elif [ -n "${GITHUB_REF#refs/tags/v}" ] && [ "${GITHUB_REF#refs/tags/v}" != "${GITHUB_REF}" ]; then
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          else
+            echo "version=0.0.0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Sync version to config files
+        shell: bash
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          echo "Building version: $VERSION"
+          node -e "
+            const fs = require('fs');
+            // tauri.conf.json
+            const tauri = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json','utf8'));
+            tauri.version = '$VERSION';
+            fs.writeFileSync('src-tauri/tauri.conf.json', JSON.stringify(tauri, null, 2) + '\n');
+            // package.json
+            const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
+            pkg.version = '$VERSION';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+            // Cargo.toml
+            let cargo = fs.readFileSync('src-tauri/Cargo.toml','utf8');
+            cargo = cargo.replace(/^version = \".*\"/m, 'version = \"$VERSION\"');
+            fs.writeFileSync('src-tauri/Cargo.toml', cargo);
+            // index.html — replace __APP_VERSION__ placeholder
+            let html = fs.readFileSync('public/index.html', 'utf8');
+            html = html.replace(/__APP_VERSION__/g, '$VERSION');
+            fs.writeFileSync('public/index.html', html);
+          "
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Install Linux system deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Build with Tauri
+        run: npm run tauri:build -- ${{ matrix.args }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: ${{ matrix.artifact-path }}
+
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.version }}" ]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          elif [ -n "${GITHUB_REF#refs/tags/v}" ] && [ "${GITHUB_REF#refs/tags/v}" != "${GITHUB_REF}" ]; then
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          else
+            echo "version=0.0.0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Sync version to config files
+        shell: bash
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          echo "Building version: $VERSION"
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
+            pkg.version = '$VERSION';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+            let cargo = fs.readFileSync('src-tauri/Cargo.toml','utf8');
+            cargo = cargo.replace(/^version = \".*\"/m, 'version = \"$VERSION\"');
+            fs.writeFileSync('src-tauri/Cargo.toml', cargo);
+            let html = fs.readFileSync('public/index.html', 'utf8');
+            html = html.replace(/__APP_VERSION__/g, '$VERSION');
+            fs.writeFileSync('public/index.html', html);
+          "
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 21
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Setup debug keystore
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: android-debug-keystore
+
+      - name: Generate debug keystore (if not cached)
+        run: |
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            mkdir -p $HOME/.android
+            keytool -genkeypair -v -keystore $HOME/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: Sync Android
+        run: npx cap sync android
+
+      - name: Build Android APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Rename APK
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          mv android/app/build/outputs/apk/debug/app-debug.apk "android/app/build/outputs/apk/debug/通用阅读器_${VERSION}.apk"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.version }}" ]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          elif [ -n "${GITHUB_REF#refs/tags/v}" ] && [ "${GITHUB_REF#refs/tags/v}" != "${GITHUB_REF}" ]; then
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          else
+            echo "version=0.0.0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Sync version to config files
+        shell: bash
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          echo "Building version: $VERSION"
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
+            pkg.version = '$VERSION';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+            let html = fs.readFileSync('public/index.html', 'utf8');
+            html = html.replace(/__APP_VERSION__/g, '$VERSION');
+            fs.writeFileSync('public/index.html', html);
+          "
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Install Capacitor iOS
+        run: npm install @capacitor/ios
+
+      - name: Add & Sync iOS platform
+        run: |
+          npx cap add ios
+          npx cap sync ios
+
+      - name: Build iOS
+        run: |
+          cd ios/App
+          xcodebuild -project App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath $PWD/build/App.xcarchive \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            archive
+
+      - name: Package iOS app
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          cd ios/App/build
+          zip -r "通用阅读器_${VERSION}_ios.zip" App.xcarchive
+
+      - name: Upload iOS app
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-app
+          path: ios/App/build/*.zip
+
+  release:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    needs: [build, android, ios]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.version }}" ]; then
+            echo "APP_VERSION=${{ inputs.version }}" >> $GITHUB_ENV
+          else
+            echo "APP_VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+          fi
+
+      - uses: actions/download-artifact@v4
+
+      - name: Delete old release if exists
+        continue-on-error: true
+        run: gh release delete v${{ env.APP_VERSION }} --yes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.APP_VERSION }}
+          name: 通用阅读器 v${{ env.APP_VERSION }}
+          body: |
+            ## 通用阅读器 / Universal Reader v${{ env.APP_VERSION }}
+
+            一个支持 15+ 种文件格式的跨平台万能阅读器。
+
+            ### 下载说明
+
+            | 平台 | 文件 | 说明 |
+            |------|------|------|
+            | Windows | `windows-bundles` 中的 `.exe` | 推荐 NSIS 安装包 |
+            | macOS | `macos-bundle` 中的 `.dmg` | 拖入 Applications |
+            | Linux x64 | `linux-amd64-bundles` 中的 `.AppImage` | 适用于银河麒麟/深度UOS |
+            | Linux ARM64 | `linux-arm64-bundles` 中的 `.AppImage` | 适用于 ARM64 国产系统 |
+            | Android | `android-apk` 中的 `.apk` | 直接安装 |
+            | iOS | `ios-app` 中的 `.zip` | 需 Xcode 签名后安装 |
+
+            ### 功能亮点
+            - 全格式阅读：MD / HTML / PDF / Word / Excel / PPT / CSV / 代码 / 图片
+            - 数学公式 (KaTeX) + Mermaid 图表
+            - PDF 注释工具（高亮/下划线/矩形/批注/便签）
+            - 加密 Office 文档解密
+            - 暗色模式 + 会话恢复
+            - 完全离线可用
+          draft: ${{ github.event_name == 'workflow_dispatch' }}
+          files: |
+            linux-amd64-bundles/**/*
+            linux-arm64-bundles/**/*
+            macos-bundle/**/*
+            windows-bundles/**/*
+            android-apk/**/*
+            ios-app/**/*.zip

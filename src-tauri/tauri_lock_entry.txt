@@ -1,0 +1,101 @@
+> E:\md-reader\src-tauri\Cargo.lock:3116:name = "tauri"
+  E:\md-reader\src-tauri\Cargo.lock:3117:version = "2.11.2"
+  E:\md-reader\src-tauri\Cargo.lock:3118:source = "registry+https://github.com/rust-lang/crates.io-index"
+  E:\md-reader\src-tauri\Cargo.lock:3119:checksum = "437404997acf375d85f1177afa7e11bb971f274ed6a7b83a2a3e339015f4cc28"
+  E:\md-reader\src-tauri\Cargo.lock:3120:dependencies = [
+  E:\md-reader\src-tauri\Cargo.lock:3121: "anyhow",
+  E:\md-reader\src-tauri\Cargo.lock:3122: "bytes",
+  E:\md-reader\src-tauri\Cargo.lock:3123: "cookie",
+  E:\md-reader\src-tauri\Cargo.lock:3124: "dirs",
+  E:\md-reader\src-tauri\Cargo.lock:3125: "dunce",
+  E:\md-reader\src-tauri\Cargo.lock:3126: "embed_plist",
+  E:\md-reader\src-tauri\Cargo.lock:3127: "getrandom 0.3.4",
+  E:\md-reader\src-tauri\Cargo.lock:3128: "glob",
+  E:\md-reader\src-tauri\Cargo.lock:3129: "gtk",
+  E:\md-reader\src-tauri\Cargo.lock:3130: "heck 0.5.0",
+  E:\md-reader\src-tauri\Cargo.lock:3131: "http",
+  E:\md-reader\src-tauri\Cargo.lock:3132: "jni",
+  E:\md-reader\src-tauri\Cargo.lock:3133: "libc",
+  E:\md-reader\src-tauri\Cargo.lock:3134: "log",
+  E:\md-reader\src-tauri\Cargo.lock:3135: "mime",
+  E:\md-reader\src-tauri\Cargo.lock:3136: "muda",
+  E:\md-reader\src-tauri\Cargo.lock:3137: "objc2",
+  E:\md-reader\src-tauri\Cargo.lock:3138: "objc2-app-kit",
+  E:\md-reader\src-tauri\Cargo.lock:3139: "objc2-foundation",
+  E:\md-reader\src-tauri\Cargo.lock:3140: "objc2-ui-kit",
+  E:\md-reader\src-tauri\Cargo.lock:3141: "objc2-web-kit",
+  E:\md-reader\src-tauri\Cargo.lock:3142: "percent-encoding",
+  E:\md-reader\src-tauri\Cargo.lock:3143: "plist",
+  E:\md-reader\src-tauri\Cargo.lock:3144: "raw-window-handle",
+  E:\md-reader\src-tauri\Cargo.lock:3145: "reqwest",
+  E:\md-reader\src-tauri\Cargo.lock:3146: "serde",
+  E:\md-reader\src-tauri\Cargo.lock:3147: "serde_json",
+  E:\md-reader\src-tauri\Cargo.lock:3148: "serde_repr",
+  E:\md-reader\src-tauri\Cargo.lock:3149: "serialize-to-javascript",
+  E:\md-reader\src-tauri\Cargo.lock:3150: "swift-rs",
+  E:\md-reader\src-tauri\Cargo.lock:3151: "tauri-build",
+  E:\md-reader\src-tauri\Cargo.lock:3152: "tauri-macros",
+  E:\md-reader\src-tauri\Cargo.lock:3153: "tauri-runtime",
+  E:\md-reader\src-tauri\Cargo.lock:3154: "tauri-runtime-wry",
+  E:\md-reader\src-tauri\Cargo.lock:3155: "tauri-utils",
+  E:\md-reader\src-tauri\Cargo.lock:3156: "thiserror 2.0.18",
+  E:\md-reader\src-tauri\Cargo.lock:3157: "tokio",
+  E:\md-reader\src-tauri\Cargo.lock:3158: "tray-icon",
+  E:\md-reader\src-tauri\Cargo.lock:3159: "url",
+  E:\md-reader\src-tauri\Cargo.lock:3160: "webkit2gtk",
+  E:\md-reader\src-tauri\Cargo.lock:3161: "webview2-com",
+  E:\md-reader\src-tauri\Cargo.lock:3162: "window-vibrancy",
+  E:\md-reader\src-tauri\Cargo.lock:3163: "windows",
+  E:\md-reader\src-tauri\Cargo.lock:3164:]
+  E:\md-reader\src-tauri\Cargo.lock:3165:
+  E:\md-reader\src-tauri\Cargo.lock:3166:[[package]]
+  E:\md-reader\src-tauri\Cargo.lock:3167:name = "tauri-build"
+  E:\md-reader\src-tauri\Cargo.lock:3168:version = "2.6.2"
+  E:\md-reader\src-tauri\Cargo.lock:3169:source = "registry+https://github.com/rust-lang/crates.io-index"
+  E:\md-reader\src-tauri\Cargo.lock:3170:checksum = "4aa1f9055fc23919a54e4e125052bed16ed04aef0487086e758fe01a67b451c7"
+  E:\md-reader\src-tauri\Cargo.lock:3171:dependencies = [
+  E:\md-reader\src-tauri\Cargo.lock:3172: "anyhow",
+  E:\md-reader\src-tauri\Cargo.lock:3173: "cargo_toml",
+  E:\md-reader\src-tauri\Cargo.lock:3174: "dirs",
+  E:\md-reader\src-tauri\Cargo.lock:3175: "glob",
+  E:\md-reader\src-tauri\Cargo.lock:3176: "heck 0.5.0",
+  E:\md-reader\src-tauri\Cargo.lock:3177: "json-patch",
+  E:\md-reader\src-tauri\Cargo.lock:3178: "schemars 0.8.22",
+  E:\md-reader\src-tauri\Cargo.lock:3179: "semver",
+  E:\md-reader\src-tauri\Cargo.lock:3180: "serde",
+  E:\md-reader\src-tauri\Cargo.lock:3181: "serde_json",
+  E:\md-reader\src-tauri\Cargo.lock:3182: "tauri-utils",
+  E:\md-reader\src-tauri\Cargo.lock:3183: "tauri-winres",
+  E:\md-reader\src-tauri\Cargo.lock:3184: "walkdir",
+  E:\md-reader\src-tauri\Cargo.lock:3185:]
+  E:\md-reader\src-tauri\Cargo.lock:3186:
+  E:\md-reader\src-tauri\Cargo.lock:3187:[[package]]
+  E:\md-reader\src-tauri\Cargo.lock:3188:name = "tauri-codegen"
+  E:\md-reader\src-tauri\Cargo.lock:3189:version = "2.6.2"
+  E:\md-reader\src-tauri\Cargo.lock:3190:source = "registry+https://github.com/rust-lang/crates.io-index"
+  E:\md-reader\src-tauri\Cargo.lock:3191:checksum = "e4a0319528a025a38c4078e7dae2c446f4e63620ddb0659a643ede1cb38f90e9"
+  E:\md-reader\src-tauri\Cargo.lock:3192:dependencies = [
+  E:\md-reader\src-tauri\Cargo.lock:3193: "base64 0.22.1",
+  E:\md-reader\src-tauri\Cargo.lock:3194: "brotli",
+  E:\md-reader\src-tauri\Cargo.lock:3195: "ico",
+  E:\md-reader\src-tauri\Cargo.lock:3196: "json-patch",
+  E:\md-reader\src-tauri\Cargo.lock:3197: "plist",
+  E:\md-reader\src-tauri\Cargo.lock:3198: "png 0.17.16",
+  E:\md-reader\src-tauri\Cargo.lock:3199: "proc-macro2",
+  E:\md-reader\src-tauri\Cargo.lock:3200: "quote",
+  E:\md-reader\src-tauri\Cargo.lock:3201: "semver",
+  E:\md-reader\src-tauri\Cargo.lock:3202: "serde",
+  E:\md-reader\src-tauri\Cargo.lock:3203: "serde_json",
+  E:\md-reader\src-tauri\Cargo.lock:3204: "sha2",
+  E:\md-reader\src-tauri\Cargo.lock:3205: "syn 2.0.118",
+  E:\md-reader\src-tauri\Cargo.lock:3206: "tauri-utils",
+  E:\md-reader\src-tauri\Cargo.lock:3207: "thiserror 2.0.18",
+  E:\md-reader\src-tauri\Cargo.lock:3208: "time",
+  E:\md-reader\src-tauri\Cargo.lock:3209: "url",
+  E:\md-reader\src-tauri\Cargo.lock:3210: "uuid",
+  E:\md-reader\src-tauri\Cargo.lock:3211: "walkdir",
+  E:\md-reader\src-tauri\Cargo.lock:3212:]
+  E:\md-reader\src-tauri\Cargo.lock:3213:
+  E:\md-reader\src-tauri\Cargo.lock:3214:[[package]]
+  E:\md-reader\src-tauri\Cargo.lock:3215:name = "tauri-macros"
+  E:\md-reader\src-tauri\Cargo.lock:3216:version = "2.6.2"
