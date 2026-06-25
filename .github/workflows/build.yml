@@ -69,32 +69,31 @@ jobs:
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
           echo "Building version: $VERSION"
-          cat > /tmp/sync-version.js << 'ENDSCRIPT'
-          const fs = require('fs');
-          const VERSION = process.argv[1];
-          const tauri = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json','utf8'));
-          tauri.version = VERSION;
-          fs.writeFileSync('src-tauri/tauri.conf.json', JSON.stringify(tauri, null, 2) + '\n');
-          const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
-          pkg.version = VERSION;
-          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
-          let cargo = fs.readFileSync('src-tauri/Cargo.toml','utf8');
-          cargo = cargo.replace(/^version = ".*"/m, 'version = "' + VERSION + '"');
-          fs.writeFileSync('src-tauri/Cargo.toml', cargo);
-          let html = fs.readFileSync('public/index.html', 'utf8');
-          html = html.replace(/__APP_VERSION__/g, VERSION);
-          fs.writeFileSync('public/index.html', html);
-          const cap = JSON.parse(fs.readFileSync('capacitor.config.json','utf8'));
-          cap.versionName = VERSION;
-          const parts = VERSION.split('.').map(Number);
-          cap.versionCode = (parts[0]||0)*10000 + (parts[1]||0)*100 + (parts[2]||0);
-          fs.writeFileSync('capacitor.config.json', JSON.stringify(cap, null, 2) + '\n');
-          let gradle = fs.readFileSync('android/app/build.gradle','utf8');
-          gradle = gradle.replace(/versionCode \d+/, 'versionCode ' + cap.versionCode);
-          gradle = gradle.replace(/versionName "[^"]*"/, 'versionName "' + VERSION + '"');
-          fs.writeFileSync('android/app/build.gradle', gradle);
-          ENDSCRIPT
-          node /tmp/sync-version.js "$VERSION"
+          printf '%s\n' \
+            'const fs = require("fs");' \
+            'const V = process.argv[1];' \
+            'const tauri = JSON.parse(fs.readFileSync("src-tauri/tauri.conf.json","utf8"));' \
+            'tauri.version = V;' \
+            'fs.writeFileSync("src-tauri/tauri.conf.json", JSON.stringify(tauri, null, 2) + "\n");' \
+            'const pkg = JSON.parse(fs.readFileSync("package.json","utf8"));' \
+            'pkg.version = V;' \
+            'fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");' \
+            'let cargo = fs.readFileSync("src-tauri/Cargo.toml","utf8");' \
+            'cargo = cargo.replace(/^version = ".*"/m, "version = \"" + V + "\"");' \
+            'fs.writeFileSync("src-tauri/Cargo.toml", cargo);' \
+            'let html = fs.readFileSync("public/index.html", "utf8");' \
+            'html = html.replace(/__APP_VERSION__/g, V);' \
+            'fs.writeFileSync("public/index.html", html);' \
+            'const cap = JSON.parse(fs.readFileSync("capacitor.config.json","utf8"));' \
+            'cap.versionName = V;' \
+            'const p = V.split(".").map(Number);' \
+            'cap.versionCode = (p[0]||0)*10000 + (p[1]||0)*100 + (p[2]||0);' \
+            'fs.writeFileSync("capacitor.config.json", JSON.stringify(cap, null, 2) + "\n");' \
+            'let g = fs.readFileSync("android/app/build.gradle","utf8");' \
+            'g = g.replace(/versionCode \d+/, "versionCode " + cap.versionCode);' \
+            'g = g.replace(/versionName "[^"]*"/, "versionName \"" + V + "\"");' \
+            'fs.writeFileSync("android/app/build.gradle", g);' \
+            | node - "$VERSION"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -171,29 +170,28 @@ jobs:
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
           echo "Building version: $VERSION"
-          cat > /tmp/sync-version.js << 'ENDSCRIPT'
-          const fs = require('fs');
-          const VERSION = process.argv[1];
-          const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
-          pkg.version = VERSION;
-          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
-          let cargo = fs.readFileSync('src-tauri/Cargo.toml','utf8');
-          cargo = cargo.replace(/^version = ".*"/m, 'version = "' + VERSION + '"');
-          fs.writeFileSync('src-tauri/Cargo.toml', cargo);
-          let html = fs.readFileSync('public/index.html', 'utf8');
-          html = html.replace(/__APP_VERSION__/g, VERSION);
-          fs.writeFileSync('public/index.html', html);
-          const cap = JSON.parse(fs.readFileSync('capacitor.config.json','utf8'));
-          cap.versionName = VERSION;
-          const parts = VERSION.split('.').map(Number);
-          cap.versionCode = (parts[0]||0)*10000 + (parts[1]||0)*100 + (parts[2]||0);
-          fs.writeFileSync('capacitor.config.json', JSON.stringify(cap, null, 2) + '\n');
-          let gradle = fs.readFileSync('android/app/build.gradle','utf8');
-          gradle = gradle.replace(/versionCode \d+/, 'versionCode ' + cap.versionCode);
-          gradle = gradle.replace(/versionName "[^"]*"/, 'versionName "' + VERSION + '"');
-          fs.writeFileSync('android/app/build.gradle', gradle);
-          ENDSCRIPT
-          node /tmp/sync-version.js "$VERSION"
+          printf '%s\n' \
+            'const fs = require("fs");' \
+            'const V = process.argv[1];' \
+            'const pkg = JSON.parse(fs.readFileSync("package.json","utf8"));' \
+            'pkg.version = V;' \
+            'fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");' \
+            'let cargo = fs.readFileSync("src-tauri/Cargo.toml","utf8");' \
+            'cargo = cargo.replace(/^version = ".*"/m, "version = \"" + V + "\"");' \
+            'fs.writeFileSync("src-tauri/Cargo.toml", cargo);' \
+            'let html = fs.readFileSync("public/index.html", "utf8");' \
+            'html = html.replace(/__APP_VERSION__/g, V);' \
+            'fs.writeFileSync("public/index.html", html);' \
+            'const cap = JSON.parse(fs.readFileSync("capacitor.config.json","utf8"));' \
+            'cap.versionName = V;' \
+            'const p = V.split(".").map(Number);' \
+            'cap.versionCode = (p[0]||0)*10000 + (p[1]||0)*100 + (p[2]||0);' \
+            'fs.writeFileSync("capacitor.config.json", JSON.stringify(cap, null, 2) + "\n");' \
+            'let g = fs.readFileSync("android/app/build.gradle","utf8");' \
+            'g = g.replace(/versionCode \d+/, "versionCode " + cap.versionCode);' \
+            'g = g.replace(/versionName "[^"]*"/, "versionName \"" + V + "\"");' \
+            'fs.writeFileSync("android/app/build.gradle", g);' \
+            | node - "$VERSION"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -270,22 +268,21 @@ jobs:
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
           echo "Building version: $VERSION"
-          cat > /tmp/sync-version.js << 'ENDSCRIPT'
-          const fs = require('fs');
-          const VERSION = process.argv[1];
-          const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
-          pkg.version = VERSION;
-          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
-          let html = fs.readFileSync('public/index.html', 'utf8');
-          html = html.replace(/__APP_VERSION__/g, VERSION);
-          fs.writeFileSync('public/index.html', html);
-          const cap = JSON.parse(fs.readFileSync('capacitor.config.json','utf8'));
-          cap.versionName = VERSION;
-          const parts = VERSION.split('.').map(Number);
-          cap.versionCode = (parts[0]||0)*10000 + (parts[1]||0)*100 + (parts[2]||0);
-          fs.writeFileSync('capacitor.config.json', JSON.stringify(cap, null, 2) + '\n');
-          ENDSCRIPT
-          node /tmp/sync-version.js "$VERSION"
+          printf '%s\n' \
+            'const fs = require("fs");' \
+            'const V = process.argv[1];' \
+            'const pkg = JSON.parse(fs.readFileSync("package.json","utf8"));' \
+            'pkg.version = V;' \
+            'fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");' \
+            'let html = fs.readFileSync("public/index.html", "utf8");' \
+            'html = html.replace(/__APP_VERSION__/g, V);' \
+            'fs.writeFileSync("public/index.html", html);' \
+            'const cap = JSON.parse(fs.readFileSync("capacitor.config.json","utf8"));' \
+            'cap.versionName = V;' \
+            'const p = V.split(".").map(Number);' \
+            'cap.versionCode = (p[0]||0)*10000 + (p[1]||0)*100 + (p[2]||0);' \
+            'fs.writeFileSync("capacitor.config.json", JSON.stringify(cap, null, 2) + "\n");' \
+            | node - "$VERSION"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
