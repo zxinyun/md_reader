@@ -1967,19 +1967,14 @@ async function renderPdfWithPdfJs(buf) {
     const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buf) });
     const pdf = await loadingTask.promise;
     htmlFrame.style.display = 'none';
+    emptyState.style.display = 'none';
 
     var wrapper = document.getElementById('pdfViewerWrapper');
     if (wrapper) wrapper.remove();
     wrapper = document.createElement('div');
     wrapper.id = 'pdfViewerWrapper';
-    wrapper.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:50px;z-index:99;background:var(--bg);display:flex;flex-direction:column;';
-    document.body.appendChild(wrapper);
-
-    var origViewport = document.querySelector('meta[name="viewport"]');
-    var origViewportContent = origViewport ? origViewport.content : '';
-    if (origViewport) {
-      origViewport.content = 'width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover';
-    }
+    wrapper.style.cssText = 'display:flex;flex-direction:column;flex:1;min-height:0;';
+    contentArea.appendChild(wrapper);
 
     var currentScale = 1;
     var currentPage = 1;
@@ -2040,21 +2035,6 @@ async function renderPdfWithPdfJs(buf) {
     ].join('');
     toolbar.appendChild(row2);
     wrapper.appendChild(toolbar);
-
-    // File navigation row (PDF reader toolbar at top)
-    var fileNavRow = document.createElement('div');
-    fileNavRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg-card);border-bottom:1px solid var(--border);font-size:13px;flex-shrink:0;';
-    fileNavRow.innerHTML = [
-      '<button id="pdfFilePrev" title="上一个文件" style="' + btnStyle + 'font-size:14px;">◀</button>',
-      '<span id="pdfFileName" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);text-align:center;">' + (state.fileName || '') + '</span>',
-      '<button id="pdfFileNext" title="下一个文件" style="' + btnStyle + 'font-size:14px;">▶</button>',
-      '<button id="pdfFileClose" title="关闭" style="' + btnStyle + 'font-size:14px;color:#f44336;">✕</button>'
-    ].join('');
-    if (state.importedFiles.length <= 1) fileNavRow.style.display = 'none';
-    wrapper.insertBefore(fileNavRow, toolbar);
-    document.getElementById('pdfFilePrev').addEventListener('click', function(e) { e.stopPropagation(); navigateDoc(-1); });
-    document.getElementById('pdfFileNext').addEventListener('click', function(e) { e.stopPropagation(); navigateDoc(1); });
-    document.getElementById('pdfFileClose').addEventListener('click', function(e) { e.stopPropagation(); document.getElementById('pdfClose').click(); });
 
     var body = document.createElement('div');
     body.style.cssText = 'flex:1;display:flex;overflow:hidden;position:relative;';
@@ -2309,7 +2289,6 @@ async function renderPdfWithPdfJs(buf) {
       }, 10);
     });
     document.getElementById('pdfClose').addEventListener('click', function() {
-      if (origViewport) origViewport.content = origViewportContent;
       wrapper.remove();
       pageCanvases = [];
       thumbCanvases = [];
