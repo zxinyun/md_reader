@@ -2,8 +2,8 @@
   "appId": "com.reader.md",
   "appName": "通用阅读器",
   "webDir": "public",
-  "versionName": "1.0.6",
-  "versionCode": 10006,
+  "versionName": "1.0.7",
+  "versionCode": 10007,
   "server": {
     "allowNavigation": []
   }

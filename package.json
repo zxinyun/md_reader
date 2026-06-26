@@ -1,6 +1,6 @@
 {
   "name": "md-reader",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "private": true,
   "description": "Universal reader supporting 15+ file formats — MD/HTML/TXT/PDF/Word/Excel/PPT/CSV/Code/Images",
   "repository": {
@@ -11,7 +11,15 @@
   "bugs": {
     "url": "https://github.com/zxinyun/md_reader/issues"
   },
-  "keywords": ["reader", "markdown", "pdf", "office", "cross-platform", "tauri", "capacitor"],
+  "keywords": [
+    "reader",
+    "markdown",
+    "pdf",
+    "office",
+    "cross-platform",
+    "tauri",
+    "capacitor"
+  ],
   "license": "GPL-3.0",
   "scripts": {
     "dev": "npx serve public -l 3000 --no-clipboard --no-request-logging",

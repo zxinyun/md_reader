@@ -1,6 +1,6 @@
 [package]
 name = "md-reader"
-version = "1.0.6"
+version = "1.0.7"
 description = "Universal reader supporting 15+ file formats"
 authors = ["zxinyun"]
 repository = "https://github.com/zxinyun/md_reader"
