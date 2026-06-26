@@ -1972,7 +1972,7 @@ async function renderPdfWithPdfJs(buf) {
     if (wrapper) wrapper.remove();
     wrapper = document.createElement('div');
     wrapper.id = 'pdfViewerWrapper';
-    wrapper.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:var(--bg);display:flex;flex-direction:column;';
+    wrapper.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:50px;z-index:99;background:var(--bg);display:flex;flex-direction:column;';
     document.body.appendChild(wrapper);
 
     var origViewport = document.querySelector('meta[name="viewport"]');
@@ -1986,7 +1986,7 @@ async function renderPdfWithPdfJs(buf) {
     var totalPages = pdf.numPages;
     var baseWidth = 0;
     var thumbScale = 0.12;
-    var showThumbs = true;
+    var showThumbs = false;
     var annotations = {};
     var notes = {};
     var activeTool = 'none';
@@ -2002,7 +2002,7 @@ async function renderPdfWithPdfJs(buf) {
     var row1 = document.createElement('div');
     row1.style.cssText = 'display:flex;align-items:center;gap:4px;padding:6px 8px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:wrap;';
     row1.innerHTML = [
-      '<button id="pdfThumbs" title="缩略图" style="' + btnStyle + 'font-size:16px;background:var(--primary);color:#fff;">☰</button>',
+      '<button id="pdfThumbs" title="缩略图" style="' + btnStyle + 'font-size:16px;">☰</button>',
       '<button id="pdfPrev" title="上一页" style="' + btnStyle + 'font-size:16px;">◀</button>',
       '<input id="pdfPageInput" type="number" min="1" max="' + totalPages + '" value="1" style="width:44px;text-align:center;padding:4px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;flex-shrink:0;" />',
       '<span id="pdfPageInfo" style="font-size:13px;color:var(--text-secondary);flex-shrink:0;">/' + totalPages + '</span>',
@@ -2061,7 +2061,7 @@ async function renderPdfWithPdfJs(buf) {
 
     var thumbPanel = document.createElement('div');
     thumbPanel.id = 'pdfThumbPanel';
-    thumbPanel.style.cssText = 'width:140px;overflow-y:auto;border-right:1px solid var(--border);background:var(--bg-card);flex-shrink:0;padding:8px;display:flex;flex-direction:column;gap:6px;';
+    thumbPanel.style.cssText = 'width:140px;overflow-y:auto;border-right:1px solid var(--border);background:var(--bg-card);flex-shrink:0;padding:8px;display:none;flex-direction:column;gap:6px;';
     body.appendChild(thumbPanel);
 
     var scrollContainer = document.createElement('div');
@@ -2155,9 +2155,10 @@ async function renderPdfWithPdfJs(buf) {
       await page.render({ canvasContext: ctx, viewport: viewport }).promise;
       var wrap = document.createElement('div');
       wrap.style.position = 'relative';
-      if (mirror || rotation !== 0) {
+      if (mirror || vMirror || rotation !== 0) {
         var transforms = [];
         if (mirror) transforms.push('scaleX(-1)');
+        if (vMirror) transforms.push('scaleY(-1)');
         if (rotation !== 0) transforms.push('rotate(' + rotation + 'deg)');
         wrap.style.transform = transforms.join(' ');
         wrap.style.transformOrigin = 'center center';
@@ -2275,37 +2276,37 @@ async function renderPdfWithPdfJs(buf) {
       this.style.background = showThumbs ? 'var(--primary)' : '';
       this.style.color = showThumbs ? '#fff' : '';
     });
-    var rotation = 0, mirror = false;
-    document.getElementById('pdfRotate').addEventListener('click', function() {
+    var rotation = 0, mirror = false, vMirror = false;
+    document.getElementById('pdfRotate').addEventListener('click', function(e) {
       var existing = document.getElementById('pdfRotateMenu');
       if (existing) { existing.remove(); return; }
+      var btn = this;
+      var rect = btn.getBoundingClientRect();
       var menu = document.createElement('div');
       menu.id = 'pdfRotateMenu';
-      menu.style.cssText = 'position:absolute;top:100%;left:0;z-index:100;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:4px;display:flex;flex-direction:column;gap:2px;box-shadow:0 4px 12px rgba(0,0,0,0.15);';
-      var subBtnStyle = 'padding:6px 12px;border:none;border-radius:4px;background:transparent;color:var(--text);font-size:13px;cursor:pointer;white-space:nowrap;text-align:left;';
+      menu.style.cssText = 'position:fixed;top:' + (rect.bottom + 4) + 'px;left:' + rect.left + 'px;z-index:99999;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:4px;display:flex;flex-direction:column;gap:2px;box-shadow:0 4px 12px rgba(0,0,0,0.2);';
+      var subBtnStyle = 'padding:8px 16px;border:none;border-radius:4px;background:transparent;color:var(--text);font-size:14px;cursor:pointer;white-space:nowrap;text-align:left;';
       var items = [
-        { text: '左旋90°', action: function() { rotation -= 90; renderAllPages(); showToast('已旋转'); } },
-        { text: '右旋90°', action: function() { rotation += 90; renderAllPages(); showToast('已旋转'); } },
-        { text: '水平镜像', action: function() { mirror = !mirror; renderAllPages(); showToast(mirror ? '已镜像' : '已取消镜像'); } }
+        { text: '↺ 左旋90°', action: function() { rotation = (rotation - 90 + 360) % 360; renderAllPages(); showToast('已左旋 ' + rotation + '°'); } },
+        { text: '↻ 右旋90°', action: function() { rotation = (rotation + 90) % 360; renderAllPages(); showToast('已右旋 ' + rotation + '°'); } },
+        { text: '↔ 水平镜像', action: function() { mirror = !mirror; renderAllPages(); showToast(mirror ? '已水平镜像' : '已取消镜像'); } },
+        { text: '↕ 垂直镜像', action: function() { vMirror = !vMirror; renderAllPages(); showToast(vMirror ? '已垂直镜像' : '已取消垂直镜像'); } }
       ];
       items.forEach(function(item) {
-        var btn = document.createElement('button');
-        btn.textContent = item.text;
-        btn.style.cssText = subBtnStyle;
-        btn.onmouseenter = function() { this.style.background = 'var(--bg-hover, rgba(128,128,128,0.1))'; };
-        btn.onmouseleave = function() { this.style.background = 'transparent'; };
-        btn.addEventListener('click', function(e) { e.stopPropagation(); item.action(); menu.remove(); });
-        menu.appendChild(btn);
+        var b = document.createElement('button');
+        b.textContent = item.text;
+        b.style.cssText = subBtnStyle;
+        b.addEventListener('click', function() { item.action(); menu.remove(); });
+        b.addEventListener('touchstart', function() { this.style.background = 'var(--primary-light)'; }, {passive:true});
+        b.addEventListener('touchend', function() { this.style.background = 'transparent'; });
+        menu.appendChild(b);
       });
-      this.style.position = 'relative';
-      this.appendChild(menu);
-      var closeMenu = function(e) {
-        if (!menu.contains(e.target) && e.target !== document.getElementById('pdfRotate')) {
-          if (menu.parentNode) menu.remove();
-          document.removeEventListener('click', closeMenu);
-        }
-      };
-      setTimeout(function() { document.addEventListener('click', closeMenu); }, 0);
+      document.body.appendChild(menu);
+      setTimeout(function() {
+        document.addEventListener('click', function closeMenu(ev) {
+          if (!menu.contains(ev.target) && ev.target !== btn) { menu.remove(); document.removeEventListener('click', closeMenu); }
+        });
+      }, 10);
     });
     document.getElementById('pdfClose').addEventListener('click', function() {
       if (origViewport) origViewport.content = origViewportContent;
