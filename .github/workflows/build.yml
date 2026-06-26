@@ -301,8 +301,6 @@ jobs:
             -configuration Release \
             -sdk iphoneos \
             -archivePath $PWD/build/App.xcarchive \
-            MARKETING_VERSION=$VERSION \
-            CURRENT_PROJECT_VERSION=$VERSION \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             archive
