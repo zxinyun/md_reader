@@ -1996,9 +1996,9 @@ async function renderPdfWithPdfJs(buf) {
     var toolbar = document.createElement('div');
     toolbar.style.cssText = 'flex-shrink:0;background:var(--bg-card);border-bottom:1px solid var(--border);user-select:none;';
     var row1 = document.createElement('div');
-    row1.style.cssText = 'display:flex;align-items:center;gap:4px;padding:6px 8px;overflow-x:auto;-webkit-overflow-scrolling:touch;';
+    row1.style.cssText = 'display:flex;align-items:center;gap:4px;padding:6px 8px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:wrap;';
     row1.innerHTML = [
-      '<button id="pdfThumbs" title="缩略图" style="' + btnStyle + 'font-size:16px;">☰</button>',
+      '<button id="pdfThumbs" title="缩略图" style="' + btnStyle + 'font-size:16px;background:var(--primary);color:#fff;">☰</button>',
       '<button id="pdfPrev" title="上一页" style="' + btnStyle + 'font-size:16px;">◀</button>',
       '<input id="pdfPageInput" type="number" min="1" max="' + totalPages + '" value="1" style="width:44px;text-align:center;padding:4px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;flex-shrink:0;" />',
       '<span id="pdfPageInfo" style="font-size:13px;color:var(--text-secondary);flex-shrink:0;">/' + totalPages + '</span>',
@@ -2009,6 +2009,7 @@ async function renderPdfWithPdfJs(buf) {
       '<button id="pdfZoomIn" title="放大" style="' + btnStyle + 'font-size:16px;">+</button>',
       '<button id="pdfFitWidth" title="适合宽度" style="' + btnStyle + '">宽度</button>',
       '<button id="pdfFitPage" title="适合页面" style="' + btnStyle + '">页面</button>',
+      '<button id="pdfRotate" title="旋转90°" style="' + btnStyle + 'font-size:16px;">🔄</button>',
       '<div style="width:1px;height:20px;background:var(--border);margin:0 2px;flex-shrink:0;"></div>',
       '<button id="pdfToolBtn" title="标注工具" style="' + btnStyle + 'font-size:16px;">✏️</button>',
       '<button id="pdfClose" title="关闭" style="' + btnStyle + 'font-size:14px;color:#f44336;">✕</button>'
@@ -2045,13 +2046,13 @@ async function renderPdfWithPdfJs(buf) {
     body.appendChild(thumbPanel);
 
     var scrollContainer = document.createElement('div');
-    scrollContainer.style.cssText = 'flex:1;overflow:auto;padding:12px;-webkit-overflow-scrolling:touch;';
+    scrollContainer.style.cssText = 'flex:1;overflow-x:auto;overflow-y:auto;padding:12px;-webkit-overflow-scrolling:touch;';
     body.appendChild(scrollContainer);
 
     wrapper.appendChild(body);
 
     var pagesContainer = document.createElement('div');
-    pagesContainer.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:8px;position:relative;';
+    pagesContainer.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:8px;position:relative;min-width:min-content;';
     scrollContainer.appendChild(pagesContainer);
 
     function updatePageInfo() {
@@ -2255,6 +2256,29 @@ async function renderPdfWithPdfJs(buf) {
       this.style.background = showThumbs ? 'var(--primary)' : '';
       this.style.color = showThumbs ? '#fff' : '';
     });
+    var rotation = 0;
+    document.getElementById('pdfRotate').addEventListener('click', function() {
+      rotation = (rotation + 90) % 360;
+      pageCanvases.forEach(function(pd) {
+        var c = pd.canvas;
+        var w = c.width, h = c.height;
+        var tmp = document.createElement('canvas');
+        tmp.width = h; tmp.height = w;
+        var ctx = tmp.getContext('2d');
+        ctx.translate(h / 2, w / 2);
+        ctx.rotate(Math.PI / 2);
+        ctx.drawImage(c, -w / 2, -h / 2);
+        c.width = h; c.height = w;
+        c.getContext('2d').drawImage(tmp, 0, 0);
+        var dispW = parseInt(c.style.width) || w;
+        var dispH = parseInt(c.style.height) || h;
+        c.style.width = dispH + 'px';
+        c.style.height = 'auto';
+        var ov = pd.element.querySelector('[data-overlay]');
+        if (ov) { ov.width = h; ov.height = w; ov.style.width = dispH + 'px'; ov.style.height = 'auto'; }
+      });
+      showToast('已旋转 ' + rotation + '°');
+    });
     document.getElementById('pdfClose').addEventListener('click', function() {
       if (origViewport) origViewport.content = origViewportContent;
       wrapper.remove();
@@ -2400,16 +2424,18 @@ async function renderPdfWithPdfJs(buf) {
     pagesContainer.addEventListener('touchstart', function(e) {
       if (activeTool === 'none') return;
       if (e.touches.length === 1) {
+        e.preventDefault();
         var pos = getTouchPos(e);
         if (pos) handleDrawStart(pos.x, pos.y);
       }
-    }, { passive: true });
+    }, { passive: false });
     pagesContainer.addEventListener('touchmove', function(e) {
       if (drawingState && e.touches.length === 1) {
+        e.preventDefault();
         var pos = getTouchPos(e);
         if (pos) handleDrawMove(pos.x, pos.y);
       }
-    }, { passive: true });
+    }, { passive: false });
     pagesContainer.addEventListener('touchend', function(e) {
       if (drawingState) {
         var pos = getTouchPos(e);
