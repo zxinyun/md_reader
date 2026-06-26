@@ -81,9 +81,6 @@ jobs:
             var cargo = fs.readFileSync("src-tauri/Cargo.toml","utf8");
             cargo = cargo.replace(/^version = ".*"/m, "version = \"" + V + "\"");
             fs.writeFileSync("src-tauri/Cargo.toml", cargo);
-            var html = fs.readFileSync("public/index.html", "utf8");
-            html = html.replace(/'__APP_VERSION__'/g, "'" + V + "'");
-            fs.writeFileSync("public/index.html", html);
             var cap = JSON.parse(fs.readFileSync("capacitor.config.json","utf8"));
             cap.versionName = V;
             var p = V.split(".").map(Number);
@@ -179,9 +176,6 @@ jobs:
             var cargo = fs.readFileSync("src-tauri/Cargo.toml","utf8");
             cargo = cargo.replace(/^version = ".*"/m, "version = \"" + V + "\"");
             fs.writeFileSync("src-tauri/Cargo.toml", cargo);
-            var html = fs.readFileSync("public/index.html", "utf8");
-            html = html.replace(/'__APP_VERSION__'/g, "'" + V + "'");
-            fs.writeFileSync("public/index.html", html);
             var cap = JSON.parse(fs.readFileSync("capacitor.config.json","utf8"));
             cap.versionName = V;
             var p = V.split(".").map(Number);
@@ -274,9 +268,6 @@ jobs:
             var pkg = JSON.parse(fs.readFileSync("package.json","utf8"));
             pkg.version = V;
             fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
-            var html = fs.readFileSync("public/index.html", "utf8");
-            html = html.replace(/'__APP_VERSION__'/g, "'" + V + "'");
-            fs.writeFileSync("public/index.html", html);
             var cap = JSON.parse(fs.readFileSync("capacitor.config.json","utf8"));
             cap.versionName = V;
             var p = V.split(".").map(Number);
