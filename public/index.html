@@ -80,7 +80,8 @@ body {
   background: var(--bg-card);
   border-bottom: 1px solid var(--border);
   display: flex; align-items: center; padding: 0 12px;
-  gap: 8px; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  gap: 8px; overflow: hidden;
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   transition: background var(--transition), border var(--transition);
 }
 .header-title {
@@ -93,7 +94,7 @@ body {
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; -webkit-tap-highlight-color: transparent;
   position: relative; transition: background 0.2s;
-  overflow: hidden; flex-shrink: 0;
+  overflow: hidden; flex-shrink: 0; touch-action: manipulation;
 }
 .header-btn:active { background: var(--primary-light); }
 
