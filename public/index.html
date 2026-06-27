@@ -4206,15 +4206,88 @@ ${katexStyle}
 function getContentAsMd() {
   if (state.fileType === 'md') return state.fileContent;
   if (state.fileType === 'html') {
-    // Extract rendered text from iframe
     try {
       const doc = htmlFrame.contentDocument || htmlFrame.contentWindow.document;
-      return doc.body ? (doc.body.innerText || doc.body.textContent || '') : '';
-    } catch(e) { return state.fileContent || ''; }
+      if (doc && doc.body) return htmlToMarkdown(doc.body);
+    } catch(e) {}
+    return state.fileContent || '';
   }
   if (state.fileType === 'txt' || state.fileType === 'code') return state.fileContent || '';
-  // For other types (docx, xlsx, etc.), extract visible text
   return mdContent.innerText || mdContent.textContent || '';
+}
+
+function htmlToMarkdown(el) {
+  var md = '';
+  for (var i = 0; i < el.childNodes.length; i++) {
+    var node = el.childNodes[i];
+    if (node.nodeType === 3) {
+      // Text node
+      md += node.textContent;
+    } else if (node.nodeType === 1) {
+      var tag = node.tagName.toLowerCase();
+      var inner = htmlToMarkdown(node);
+      if (tag === 'h1') md += '\n# ' + inner.trim() + '\n\n';
+      else if (tag === 'h2') md += '\n## ' + inner.trim() + '\n\n';
+      else if (tag === 'h3') md += '\n### ' + inner.trim() + '\n\n';
+      else if (tag === 'h4') md += '\n#### ' + inner.trim() + '\n\n';
+      else if (tag === 'h5') md += '\n##### ' + inner.trim() + '\n\n';
+      else if (tag === 'h6') md += '\n###### ' + inner.trim() + '\n\n';
+      else if (tag === 'p') md += inner.trim() + '\n\n';
+      else if (tag === 'br') md += '\n';
+      else if (tag === 'strong' || tag === 'b') md += '**' + inner.trim() + '**';
+      else if (tag === 'em' || tag === 'i') md += '*' + inner.trim() + '*';
+      else if (tag === 'del' || tag === 's') md += '~~' + inner.trim() + '~~';
+      else if (tag === 'code' && node.parentNode.tagName.toLowerCase() !== 'pre') md += '`' + inner + '`';
+      else if (tag === 'pre') {
+        var codeEl = node.querySelector('code');
+        var lang = '';
+        if (codeEl) {
+          var cls = codeEl.className || '';
+          var m = cls.match(/language-(\w+)/);
+          if (m) lang = m[1];
+        }
+        md += '\n```' + lang + '\n' + (codeEl || node).textContent + '\n```\n\n';
+      }
+      else if (tag === 'a') md += '[' + inner.trim() + '](' + (node.getAttribute('href') || '') + ')';
+      else if (tag === 'img') md += '![' + (node.getAttribute('alt') || '') + '](' + (node.getAttribute('src') || '') + ')';
+      else if (tag === 'blockquote') md += inner.trim().split('\n').map(function(l) { return '> ' + l; }).join('\n') + '\n\n';
+      else if (tag === 'ul') {
+        var items = node.querySelectorAll(':scope > li');
+        items.forEach(function(li) { md += '- ' + htmlToMarkdown(li).trim() + '\n'; });
+        md += '\n';
+      }
+      else if (tag === 'ol') {
+        var items = node.querySelectorAll(':scope > li');
+        items.forEach(function(li, idx) { md += (idx + 1) + '. ' + htmlToMarkdown(li).trim() + '\n'; });
+        md += '\n';
+      }
+      else if (tag === 'li') md += inner;
+      else if (tag === 'hr') md += '\n---\n\n';
+      else if (tag === 'table') md += htmlTableToMarkdown(node);
+      else if (tag === 'div' || tag === 'section' || tag === 'article' || tag === 'span') md += inner;
+      else md += inner;
+    }
+  }
+  return md;
+}
+
+function htmlTableToMarkdown(table) {
+  var rows = [];
+  var trs = table.querySelectorAll('tr');
+  trs.forEach(function(tr) {
+    var cells = [];
+    tr.querySelectorAll('th,td').forEach(function(cell) {
+      cells.push(htmlToMarkdown(cell).trim().replace(/\|/g, '\\|'));
+    });
+    rows.push(cells);
+  });
+  if (!rows.length) return '';
+  var md = '| ' + rows[0].join(' | ') + ' |\n';
+  md += '| ' + rows[0].map(function() { return '---'; }).join(' | ') + ' |\n';
+  for (var i = 1; i < rows.length; i++) {
+    md += '| ' + rows[i].join(' | ') + ' |\n';
+  }
+  return '\n' + md + '\n';
 }
 
 function getContentAsCsv() {
