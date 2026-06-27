@@ -1148,17 +1148,20 @@ function loadScript(src) {
 // ===== Encoding detection & decoding =====
 async function decodeText(buffer) {
   const bytes = new Uint8Array(buffer);
+  var enc = 'UTF-8';
   // BOM detection
   if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE)
-    return new TextDecoder('utf-16le').decode(buffer);
+    return { text: new TextDecoder('utf-16le').decode(buffer), encoding: 'UTF-16 LE' };
   if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF)
-    return new TextDecoder('utf-16be').decode(buffer);
+    return { text: new TextDecoder('utf-16be').decode(buffer), encoding: 'UTF-16 BE' };
   if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF)
-    return new TextDecoder('utf-8').decode(buffer.slice(3));
+    return { text: new TextDecoder('utf-8').decode(buffer.slice(3)), encoding: 'UTF-8 (BOM)' };
 
   // Try UTF-8 first (strict)
-  try { return new TextDecoder('utf-8', { fatal: true }).decode(buffer); }
-  catch (e) { /* not valid UTF-8, try detection */ }
+  try {
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+    return { text: text, encoding: 'UTF-8' };
+  } catch (e) { /* not valid UTF-8, try detection */ }
 
   try {
     if (typeof jschardet === 'undefined') {
@@ -1168,24 +1171,23 @@ async function decodeText(buffer) {
     const sample = bytes.length > 65536 ? bytes.slice(0, 65536) : bytes;
     const detected = jschardet.detect(sample);
     if (detected && detected.encoding) {
-      const enc = detected.encoding.toLowerCase().replace(/[^a-z0-9-]/g, '');
-      const map = { 'gb2312':'gbk', 'gbk':'gbk', 'gb18030':'gb18030', 'big5':'big5',
-        'euc-kr':'euc-kr', 'euc-jp':'euc-jp', 'shift_jis':'shift-jis',
-        'iso-2022-jp':'iso-2022-jp', 'windows-1252':'windows-1252',
-        'iso-8859-1':'iso-8859-1', 'koi8-r':'koi8-r',
-        'ascii':'utf-8', 'utf-8':'utf-8' };
-      const finalEnc = map[enc] || enc;
-      try { return new TextDecoder(finalEnc).decode(buffer); }
-      catch (e2) { /* fallback */ }
+      const map = { 'gb2312':'GBK', 'gbk':'GBK', 'gb18030':'GB18030', 'big5':'Big5',
+        'euc-kr':'EUC-KR', 'euc-jp':'EUC-JP', 'shift_jis':'Shift-JIS',
+        'iso-2022-jp':'ISO-2022-JP', 'windows-1252':'Windows-1252',
+        'iso-8859-1':'ISO-8859-1', 'koi8-r':'KOI8-R',
+        'ascii':'ASCII', 'utf-8':'UTF-8' };
+      const finalEnc = map[detected.encoding.toLowerCase()] || detected.encoding;
+      try {
+        const text = new TextDecoder(detected.encoding.toLowerCase()).decode(buffer);
+        return { text: text, encoding: finalEnc };
+      } catch (e2) { /* fallback */ }
     }
   } catch (e) { /* detection failed */ }
 
   // Final fallback: try common CJK encodings
-  try { return new TextDecoder('gbk').decode(buffer); }
-  catch (e) {}
-  try { return new TextDecoder('big5').decode(buffer); }
-  catch (e) {}
-  return new TextDecoder('utf-8', { fatal: false }).decode(buffer);
+  try { const t = new TextDecoder('gbk').decode(buffer); return { text: t, encoding: 'GBK' }; } catch (e) {}
+  try { const t = new TextDecoder('big5').decode(buffer); return { text: t, encoding: 'Big5' }; } catch (e) {}
+  return { text: new TextDecoder('utf-8', { fatal: false }).decode(buffer), encoding: 'UTF-8 (fallback)' };
 }
 
 // ===== About dialog =====
@@ -1794,7 +1796,14 @@ async function loadFile(source) {
     _d('check passed');
   }
 
-  state.fileContent = isBinary ? raw : await decodeText(raw);
+  if (isBinary) {
+    state.fileContent = raw;
+    state.fileEncoding = 'Binary';
+  } else {
+    const decoded = await decodeText(raw);
+    state.fileContent = decoded.text;
+    state.fileEncoding = decoded.encoding;
+  }
   state._currentImportPath = fd ? (fd._path || fd.path) : name;
   _d('fileContent set: type=' + typeof state.fileContent + ' byteLength=' + (state.fileContent ? state.fileContent.byteLength || state.fileContent.length : 0));
   if (!state.importedFiles.some(f => f.name === name && f.fullPath === (fd ? (fd._path || fd.path) : name))) {
@@ -4159,13 +4168,32 @@ function getOriginalContent() {
   return state.fileContent;
 }
 
-async function copyAllContent() {
-  const text = getOriginalContent();
+async function copyAllContent(mode) {
+  if (!mode) mode = 'original';
+  var text = '';
+  if (mode === 'rendered') {
+    // Copy the rendered/visible content
+    if (state.fileType === 'html' && htmlFrame.style.display !== 'none') {
+      try {
+        var doc = htmlFrame.contentDocument || htmlFrame.contentWindow.document;
+        text = doc.body ? (doc.body.innerText || doc.body.textContent || '') : '';
+      } catch(e) { text = mdContent.innerText || mdContent.textContent || ''; }
+    } else if (state.fileType === 'md') {
+      text = mdContent.innerText || mdContent.textContent || '';
+    } else if (state.fileType === 'docx' || state.fileType === 'xlsx' || state.fileType === 'pptx' || state.fileType === 'doc') {
+      text = mdContent.innerText || mdContent.textContent || '';
+    } else {
+      text = getOriginalContent();
+    }
+  } else {
+    text = getOriginalContent();
+  }
   if (!text) { showToast('没有可复制的内容'); return; }
   try {
     await navigator.clipboard.writeText(text);
     const len = text.length;
-    showToast(`已复制全部内容 (${len.toLocaleString()} 字符)`);
+    const label = mode === 'rendered' ? '渲染样式' : '原始格式';
+    showToast(`已复制 ${label} (${len.toLocaleString()} 字符)`);
   } catch (e) {
     fallbackCopy(text);
   }
@@ -4187,13 +4215,18 @@ function showCopySheet() {
     <div class="sheet-handle"></div>
     <div class="sheet-title">📋 复制内容</div>
     <div class="sheet-group">
-      <button class="theme-opt" id="copyAllBtn" style="flex:none;width:100%;margin-bottom:8px">📄 复制全部内容</button>
-      <p style="font-size:12px;color:var(--text-secondary);line-height:1.5">提示：你也可以直接长按或拖动选择部分文本后复制</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button class="theme-opt" id="copyRenderedBtn" style="flex:none">📄 渲染样式</button>
+        <button class="theme-opt" id="copyOriginalBtn" style="flex:none">📝 原始格式</button>
+      </div>
+      <p style="font-size:12px;color:var(--text-secondary);line-height:1.5;margin-top:8px">渲染样式：复制显示后的文本内容<br>原始格式：复制源文件原始内容<br>提示：你也可以长按或拖动选择部分文本后复制</p>
     </div>`;
   openSheet(html);
   setTimeout(() => {
-    const btn = document.getElementById('copyAllBtn');
-    if (btn) btn.addEventListener('click', () => { closeSheet(); copyAllContent(); });
+    const renderedBtn = document.getElementById('copyRenderedBtn');
+    const originalBtn = document.getElementById('copyOriginalBtn');
+    if (renderedBtn) renderedBtn.addEventListener('click', () => { closeSheet(); copyAllContent('rendered'); });
+    if (originalBtn) originalBtn.addEventListener('click', () => { closeSheet(); copyAllContent('original'); });
   }, 50);
 }
 
@@ -5102,7 +5135,9 @@ async function readFileBlob(fileOrDesc, binary) {
     return await FileAPI.readAsText(fileOrDesc);
   } catch(e) {
     const arr = await FileAPI.readAsArrayBuffer(fileOrDesc);
-    return decodeText(arr);
+    const decoded = await decodeText(arr);
+    state.fileEncoding = decoded.encoding;
+    return decoded.text;
   }
 }
 
@@ -6700,9 +6735,20 @@ function showSheetSwitcher() {
 
 function showFileInfo() {
   if (!state.fileContent) { showToast('没有文件信息'); return; }
-  const sizeKB = state.fileContent instanceof ArrayBuffer
-    ? Math.round(state.fileContent.byteLength / 1024)
-    : Math.round(new Blob([state.fileContent]).size / 1024);
+  // Precise file size
+  var sizeBytes = 0;
+  if (state.fileContent instanceof ArrayBuffer) {
+    sizeBytes = state.fileContent.byteLength;
+  } else if (typeof state.fileContent === 'string') {
+    sizeBytes = new Blob([state.fileContent]).size;
+  } else {
+    sizeBytes = new Blob([state.fileContent]).size;
+  }
+  var sizeStr;
+  if (sizeBytes < 1024) sizeStr = sizeBytes + ' B';
+  else if (sizeBytes < 1024 * 1024) sizeStr = (sizeBytes / 1024).toFixed(1) + ' KB';
+  else sizeStr = (sizeBytes / 1024 / 1024).toFixed(2) + ' MB';
+
   let lines = 'N/A';
   if (state.fileMeta.rows !== undefined) {
     lines = state.fileMeta.rows + ' 行 × ' + state.fileMeta.cols + ' 列';
@@ -6715,6 +6761,17 @@ function showFileInfo() {
       lines = c > 1 ? c + ' 行' : '渲染中';
     }
   }
+
+  // Encoding info for text files
+  var encoding = state.fileEncoding || '';
+  if (!encoding && typeof state.fileContent === 'string') {
+    encoding = 'UTF-8 (text)';
+  }
+
+  var encodingHtml = encoding
+    ? `<div style="background:var(--bg);padding:10px;border-radius:var(--radius-sm)"><div style="font-weight:700">编码</div><div style="font-size:12px;color:var(--text-secondary)">${escapeHtml(encoding)}</div></div>`
+    : '';
+
   const html = `
     <div class="sheet-handle"></div>
     <div class="sheet-title">ℹ️ 文件信息</div>
@@ -6728,10 +6785,11 @@ function showFileInfo() {
           <div style="font-size:12px;color:var(--text-secondary)">.${state.fileExt || state.fileType}</div></div>
         <div style="background:var(--bg);padding:10px;border-radius:var(--radius-sm)">
           <div style="font-weight:700">大小</div>
-          <div style="font-size:12px;color:var(--text-secondary)">${sizeKB} KB</div></div>
+          <div style="font-size:12px;color:var(--text-secondary)">${sizeStr}</div></div>
         <div style="background:var(--bg);padding:10px;border-radius:var(--radius-sm)">
           <div style="font-weight:700">行数</div>
           <div style="font-size:12px;color:var(--text-secondary)">${lines}</div></div>
+        ${encodingHtml}
       </div>
     </div>`;
   openSheet(html);
