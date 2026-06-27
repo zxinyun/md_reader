@@ -4718,17 +4718,24 @@ async function exportAsImage(mode) {
     showToast(`已导出 ${sections.length} 张分段截图`);
   } else if (mode === 'pdf') {
     // Export as PDF via browser print dialog
-    const printWin = window.open('', '_blank');
-    if (!printWin) { showToast('弹窗被阻止，请允许弹窗后重试'); return; }
-    // Collect all stylesheets including dynamically loaded KaTeX CSS
     const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]')).map(el => el.outerHTML).join('\n');
-    // Get the rendered content (not raw source)
-    const content = target.innerHTML;
-    printWin.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${state.fileName || '导出'}</title>${styles}<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:800px;margin:0 auto;padding:20px;color:#333;line-height:1.7}img{max-width:100%;height:auto}pre{white-space:pre-wrap;word-break:break-all}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:6px 10px}th{background:#f5f5f5}@media print{body{padding:0}pre{white-space:pre-wrap}}</style></head><body>${content}</body></html>`);
-    printWin.document.close();
+    // Get rendered content - handle iframe (HTML files) separately
+    var content = '';
+    if (state.fileType === 'html' && htmlFrame.style.display !== 'none') {
+      try {
+        var doc = htmlFrame.contentDocument || htmlFrame.contentWindow.document;
+        content = doc.body ? doc.body.innerHTML : '';
+      } catch(e) { content = target.innerHTML; }
+    } else {
+      content = target.innerHTML;
+    }
+    const htmlDoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${state.fileName || '导出'}</title>${styles}<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:800px;margin:0 auto;padding:20px;color:#333;line-height:1.7}img{max-width:100%;height:auto}pre{white-space:pre-wrap;word-break:break-all}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:6px 10px}th{background:#f5f5f5}@media print{body{padding:0;margin:0 auto}pre{white-space:pre-wrap}}</style></head><body>${content}</body></html>`;
+    const blob = new Blob([htmlDoc], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const printWin = window.open(url, '_blank');
+    if (!printWin) { URL.revokeObjectURL(url); showToast('弹窗被阻止，请允许弹窗后重试'); return; }
     printWin.onload = function() {
-      // Give KaTeX time to render, then print
-      setTimeout(function() { printWin.print(); }, 500);
+      setTimeout(function() { printWin.print(); URL.revokeObjectURL(url); }, 800);
     };
     showToast('请在打印对话框中选择"另存为 PDF"');
   }
