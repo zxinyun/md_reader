@@ -3912,7 +3912,7 @@ async function enhanceDisplayMath() {
       const m = el.textContent.trim().match(/^\$\$(.+)\$\$$/);
       if (m) {
         const math = m[1].trim();
-        if (math) { try { el.innerHTML = katex.renderToString(math, { displayMode: true, throwOnError: false }); } catch(e) {} }
+        if (math) { try { el.innerHTML = katex.renderToString(math, { displayMode: true, throwOnError: false, output: 'htmlAndMathml' }); } catch(e) {} }
       }
     }
   }
@@ -3928,7 +3928,7 @@ async function enhanceDisplayMath() {
           const math = parts.join('\n').trim();
           if (math) {
             try {
-              const html = katex.renderToString(math, { displayMode: true, throwOnError: false });
+              const html = katex.renderToString(math, { displayMode: true, throwOnError: false, output: 'htmlAndMathml' });
               const div = document.createElement('div');
               div.innerHTML = html;
               el.replaceWith(div);
@@ -3972,7 +3972,7 @@ async function enhanceInlineMath() {
       found = true;
       parts.push(text.slice(last, match.index));
       try {
-        parts.push(katex.renderToString(expr, { displayMode: false, throwOnError: false }));
+        parts.push(katex.renderToString(expr, { displayMode: false, throwOnError: false, output: 'htmlAndMathml' }));
       } catch(e) { parts.push('$' + expr + '$'); }
       last = match.index + match[0].length;
     }
