@@ -412,8 +412,9 @@ body {
 /* ===== Action Strip ===== */
 .action-strip {
   border-bottom: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--bg-card);
   position: sticky; top: var(--header-h); z-index: 50;
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
 }
 .action-row {
   display: flex; align-items: center; gap: 2px;
@@ -426,9 +427,10 @@ body {
   cursor: pointer; border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
   -webkit-tap-highlight-color: transparent;
-  flex-shrink: 0;
+  flex-shrink: 0; color: var(--text);
+  transition: background 0.15s, color 0.15s;
 }
-.action-btn:active { background: var(--bg-code); }
+.action-btn:active { background: var(--primary-light); color: var(--primary); }
 .zoom-btn { font-size: 12px; font-weight: 700; width: 30px; height: 30px; }
 .zoom-level { font-size: 11px; min-width: 36px; text-align: center; color: var(--text-secondary); user-select: none; }
 .search-bar {
@@ -1560,6 +1562,9 @@ function showBookmarkSheet() {
 function clearDocument() {
   if (!state.fileName) { showToast('没有打开的文档'); return; }
   if (!confirm('确定清空当前文档？')) return;
+  // Remove URL close button
+  var _ucb = document.getElementById('urlCloseBtn');
+  if (_ucb) _ucb.remove();
   // Keep file in DB for session restore on next page load — only clear UI
   if (state.fileType === 'html' || state.fileType === 'pdf') {
     if (htmlFrame.src && htmlFrame.src.startsWith('blob:')) URL.revokeObjectURL(htmlFrame.src);
@@ -1884,6 +1889,9 @@ function updateEditBtn() {
 async function renderContent() {
   showActionStrip(true);
   hideLoading();
+  // Remove URL close button if present
+  var _ucb = document.getElementById('urlCloseBtn');
+  if (_ucb) _ucb.remove();
   // Close PDF viewer if open
   var _pw = document.getElementById('pdfViewerWrapper');
   if (_pw) _pw.remove();
@@ -2744,6 +2752,28 @@ async function browseUrl(prefill) {
   htmlFrame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms');
   htmlFrame.src = finalUrl;
   showActionStrip(true);
+
+  // Add floating close button for URL browsing
+  var closeBtn = document.getElementById('urlCloseBtn');
+  if (closeBtn) closeBtn.remove();
+  closeBtn = document.createElement('button');
+  closeBtn.id = 'urlCloseBtn';
+  closeBtn.innerHTML = '✕';
+  closeBtn.title = '关闭网页';
+  closeBtn.style.cssText = 'position:fixed;top:calc(var(--header-h) + 8px);right:8px;z-index:200;width:36px;height:36px;border:none;border-radius:50%;background:rgba(0,0,0,0.6);color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.3)';
+  closeBtn.onclick = function() {
+    htmlFrame.src = '';
+    htmlFrame.style.display = 'none';
+    mdContent.style.display = 'none';
+    emptyState.style.display = 'flex';
+    state.fileContent = null;
+    state.fileName = '';
+    state.fileType = '';
+    titleDisplay.textContent = '通用阅读器';
+    closeBtn.remove();
+    showActionStrip(false);
+  };
+  document.body.appendChild(closeBtn);
 }
 
 async function renderDocx(arrayBuffer) {
@@ -5085,7 +5115,6 @@ $('openBtn').addEventListener('click', async () => {
       });
     } else {
       await openImportedFile(_targetIdx);
-    }
     }
     showToast(`已打开 ${_count} 个文件`);
   }
