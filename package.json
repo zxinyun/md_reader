@@ -1,6 +1,6 @@
 {
   "name": "md-reader",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "private": true,
   "description": "Universal reader supporting 15+ file formats — MD/HTML/TXT/PDF/Word/Excel/PPT/CSV/Code/Images",
   "repository": {
