@@ -797,6 +797,8 @@ const __BUILD_ID__ = '20260619-0500';
 const __APP_VERSION__ = '__APP_VERSION__';
 const __VERSION__ = '1.0.8';
 const __FEATURES__ = { multiFile: true, imageSupport: true, debugPanel: true };
+// Preload PDF.js module (cached for subsequent imports)
+try { import('./lib/pdf.min.mjs').catch(function(){}); } catch(e) {}
 // ===== Markdown Parser (standalone) =====
 const mdParser = (() => {
 function escapeHtml(text) {
@@ -1977,6 +1979,7 @@ async function renderPdfWithPdfJs(buf) {
     contentArea.appendChild(wrapper);
 
     var currentScale = 1;
+    var _scaleManual = false;
     var currentPage = 1;
     var totalPages = pdf.numPages;
     var baseWidth = 0;
@@ -2006,9 +2009,7 @@ async function renderPdfWithPdfJs(buf) {
       '<button id="pdfZoomOut" title="缩小" style="' + btnStyle + 'font-size:16px;">−</button>',
       '<span id="pdfZoomLevel" style="font-size:12px;color:var(--text-secondary);min-width:36px;text-align:center;flex-shrink:0;">100%</span>',
       '<button id="pdfZoomIn" title="放大" style="' + btnStyle + 'font-size:16px;">+</button>',
-      '<button id="pdfFitWidth" title="适合宽度 - 页面填满屏幕宽度" style="' + btnStyle + '">适宽</button>',
-      '<button id="pdfFitPage" title="适合页面 - 显示完整页面" style="' + btnStyle + '">适页</button>',
-      '<button id="pdfRotate" title="旋转90°" style="' + btnStyle + 'font-size:16px;">🔄</button>',
+      '<button id="pdfRotate" title="旋转/镜像" style="' + btnStyle + 'font-size:16px;">🔄</button>',
       '<div style="width:1px;height:20px;background:var(--border);margin:0 2px;flex-shrink:0;"></div>',
       '<button id="pdfToolBtn" title="标注工具" style="' + btnStyle + 'font-size:16px;">✏️</button>',
       '<button id="pdfClose" title="关闭" style="' + btnStyle + 'font-size:14px;color:#f44336;">✕</button>'
@@ -2124,11 +2125,12 @@ async function renderPdfWithPdfJs(buf) {
       pagesContainer.style.alignItems = 'center';
       pageCanvases = [];
       var page = await pdf.getPage(currentPage);
-      // Auto-fit: calculate scale to fit container width
+      // Auto-fit: calculate scale to fit container width (always on first load)
       var containerW = scrollContainer.clientWidth - 24;
       var rawViewport = page.getViewport({ scale: 1 });
-      var fitScale = containerW / rawViewport.width * (window.devicePixelRatio || 1);
-      if (currentScale === 1 || currentScale === fitScale) currentScale = fitScale;
+      if (containerW > 0 && !_scaleManual) {
+        currentScale = containerW / rawViewport.width * (window.devicePixelRatio || 1);
+      }
       var viewport = page.getViewport({ scale: currentScale });
       baseWidth = viewport.width;
       var canvas = document.createElement('canvas');
@@ -2233,43 +2235,34 @@ async function renderPdfWithPdfJs(buf) {
       }
     });
     document.getElementById('pdfZoomIn').addEventListener('click', function() {
+      _scaleManual = true;
       currentScale = Math.min(currentScale * 1.25, 10);
       renderAllPages().then(renderThumbnails);
     });
     document.getElementById('pdfZoomOut').addEventListener('click', function() {
+      _scaleManual = true;
       currentScale = Math.max(currentScale / 1.25, 0.25);
       renderAllPages().then(renderThumbnails);
     });
     // Register PDF zoom for main toolbar zoom buttons
     wrapper._pdfZoom = function(delta) {
+      _scaleManual = true;
       currentScale = Math.min(Math.max(currentScale * (1 + delta), 0.25), 10);
       renderAllPages().then(renderThumbnails);
       zoomDisplay.textContent = Math.round(currentScale * 100) + '%';
     };
     wrapper._pdfFitWidth = function() {
-      var containerW = scrollContainer.clientWidth - 24;
-      var page = pdf.getPage(currentPage);
-      page.then(function(p) {
-        var vp = p.getViewport({ scale: 1 });
-        currentScale = containerW / vp.width * (window.devicePixelRatio || 1);
-        renderAllPages().then(renderThumbnails);
-      });
+      _scaleManual = false;
+      renderAllPages().then(renderThumbnails);
     };
-    document.getElementById('pdfFitWidth').addEventListener('click', function() {
-      currentScale = scrollContainer.clientWidth / (baseWidth / currentScale) * currentScale / (window.devicePixelRatio || 1);
+    wrapper._pdfNav = function(dir) {
+      var newPage = currentPage + dir;
+      if (newPage < 1 || newPage > totalPages) return;
+      currentPage = newPage;
       renderAllPages().then(renderThumbnails);
-    });
-    document.getElementById('pdfFitPage').addEventListener('click', function() {
-      var page1 = pageCanvases[0];
-      if (!page1) return;
-      var cw = scrollContainer.clientWidth - 24;
-      var ch = scrollContainer.clientHeight - 24;
-      var vp = page1.viewport;
-      var scaleW = cw / (vp.width / (window.devicePixelRatio || 1));
-      var scaleH = ch / (vp.height / (window.devicePixelRatio || 1));
-      currentScale = Math.min(scaleW, scaleH);
-      renderAllPages().then(renderThumbnails);
-    });
+    };
+    // Delay first render so container has layout dimensions
+    setTimeout(function() { renderAllPages().then(renderThumbnails); }, 50);
     document.getElementById('pdfThumbs').addEventListener('click', function() {
       showThumbs = !showThumbs;
       thumbPanel.style.display = showThumbs ? 'flex' : 'none';
@@ -6161,8 +6154,13 @@ $('tbFont').addEventListener('click', showFontSheet);
 $('tbStats').addEventListener('click', showStats);
 
 // ===== Fullscreen =====
+function _pdfFullscreenNav(dir) {
+  var pdfWrapper = document.getElementById('pdfViewerWrapper');
+  if (pdfWrapper && pdfWrapper._pdfNav) pdfWrapper._pdfNav(dir);
+}
 $('tbFullscreen').addEventListener('click', () => {
   var pdfWrapper = document.getElementById('pdfViewerWrapper');
+  var isPdf = !!pdfWrapper;
   if (!document.fullscreenElement && !document.webkitFullscreenElement) {
     const el = document.documentElement;
     if (el.requestFullscreen) {
@@ -6170,16 +6168,44 @@ $('tbFullscreen').addEventListener('click', () => {
     } else if (el.webkitRequestFullscreen) {
       el.webkitRequestFullscreen();
     }
-    showToast('进入全屏');
-    // Re-fit PDF after fullscreen
-    if (pdfWrapper && pdfWrapper._pdfFitWidth) {
-      setTimeout(function() { pdfWrapper._pdfFitWidth(); }, 300);
+    // True fullscreen for PDF: hide all UI
+    if (isPdf) {
+      document.querySelector('.header').style.display = 'none';
+      document.querySelector('.action-strip').style.display = 'none';
+      document.querySelector('.toolbar').style.display = 'none';
+      document.querySelector('.progress-bar').style.display = 'none';
+      contentArea.style.padding = '0';
+      contentArea.style.paddingBottom = '0';
+      // Add floating nav buttons
+      var fsNav = document.createElement('div');
+      fsNav.id = 'pdfFullscreenNav';
+      fsNav.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;gap:12px;background:rgba(0,0,0,0.6);border-radius:30px;padding:8px 16px;';
+      fsNav.innerHTML = '<button id="fsPrev" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer;padding:8px 16px;">◀</button><button id="fsExit" style="background:none;border:none;color:#fff;font-size:14px;cursor:pointer;padding:8px 12px;">✕ 退出</button><button id="fsNext" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer;padding:8px 16px;">▶</button>';
+      document.body.appendChild(fsNav);
+      document.getElementById('fsPrev').onclick = function() { _pdfFullscreenNav(-1); };
+      document.getElementById('fsNext').onclick = function() { _pdfFullscreenNav(1); };
+      document.getElementById('fsExit').onclick = function() { $('tbFullscreen').click(); };
+      // Re-fit PDF
+      if (pdfWrapper._pdfFitWidth) setTimeout(function() { pdfWrapper._pdfFitWidth(); }, 300);
     }
+    showToast('进入全屏');
   } else {
     if (document.exitFullscreen) {
       document.exitFullscreen().catch(() => {});
     } else if (document.webkitExitFullscreen) {
       document.webkitExitFullscreen();
+    }
+    // Restore UI
+    if (isPdf) {
+      document.querySelector('.header').style.display = '';
+      document.querySelector('.action-strip').style.display = '';
+      document.querySelector('.toolbar').style.display = '';
+      document.querySelector('.progress-bar').style.display = '';
+      contentArea.style.padding = '';
+      contentArea.style.paddingBottom = '';
+      var fsNav = document.getElementById('pdfFullscreenNav');
+      if (fsNav) fsNav.remove();
+      if (pdfWrapper._pdfFitWidth) setTimeout(function() { pdfWrapper._pdfFitWidth(); }, 300);
     }
     showToast('退出全屏');
   }
