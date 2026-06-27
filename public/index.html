@@ -4221,10 +4221,18 @@ function htmlToMarkdown(el) {
   for (var i = 0; i < el.childNodes.length; i++) {
     var node = el.childNodes[i];
     if (node.nodeType === 3) {
-      // Text node
       md += node.textContent;
     } else if (node.nodeType === 1) {
       var tag = node.tagName.toLowerCase();
+      // KaTeX: extract LaTeX from <annotation> element
+      if (node.classList && node.classList.contains('katex-display')) {
+        var ann = node.querySelector('annotation');
+        if (ann) { md += '\n$$' + ann.textContent.trim() + '$$\n\n'; continue; }
+      }
+      if (node.classList && node.classList.contains('katex') && !(node.parentNode && node.parentNode.classList && node.parentNode.classList.contains('katex-display'))) {
+        var ann = node.querySelector('annotation');
+        if (ann) { md += '$' + ann.textContent.trim() + '$'; continue; }
+      }
       var inner = htmlToMarkdown(node);
       if (tag === 'h1') md += '\n# ' + inner.trim() + '\n\n';
       else if (tag === 'h2') md += '\n## ' + inner.trim() + '\n\n';
