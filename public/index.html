@@ -4227,7 +4227,7 @@ function htmlToMarkdown(el) {
       md += node.textContent;
     } else if (node.nodeType === 1) {
       var tag = node.tagName.toLowerCase();
-      // KaTeX: extract LaTeX from <annotation> inside <math> → <semantics>
+      // KaTeX: try annotation first, fallback to text placeholder
       if (node.classList && (node.classList.contains('katex') || node.classList.contains('katex-display'))) {
         var ann = node.querySelector('annotation[encoding="application/x-tex"]') || node.querySelector('annotation');
         if (ann) {
@@ -4236,6 +4236,17 @@ function htmlToMarkdown(el) {
             md += '\n$$' + tex + '$$\n\n';
           } else {
             md += '$' + tex + '$';
+          }
+          continue;
+        }
+        // No annotation — use visible text as fallback
+        var katexHtml = node.querySelector('.katex-html');
+        var katexText = katexHtml ? katexHtml.textContent.trim() : node.textContent.trim();
+        if (katexText) {
+          if (node.classList.contains('katex-display')) {
+            md += '\n$$' + katexText + '$$\n\n';
+          } else {
+            md += '$' + katexText + '$';
           }
           continue;
         }
