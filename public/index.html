@@ -2233,7 +2233,7 @@ async function renderPdfWithPdfJs(buf) {
       }
     });
     document.getElementById('pdfZoomIn').addEventListener('click', function() {
-      currentScale = Math.min(currentScale * 1.25, 5);
+      currentScale = Math.min(currentScale * 1.25, 10);
       renderAllPages().then(renderThumbnails);
     });
     document.getElementById('pdfZoomOut').addEventListener('click', function() {
@@ -2242,7 +2242,7 @@ async function renderPdfWithPdfJs(buf) {
     });
     // Register PDF zoom for main toolbar zoom buttons
     wrapper._pdfZoom = function(delta) {
-      currentScale = Math.min(Math.max(currentScale * (1 + delta), 0.25), 5);
+      currentScale = Math.min(Math.max(currentScale * (1 + delta), 0.25), 10);
       renderAllPages().then(renderThumbnails);
       zoomDisplay.textContent = Math.round(currentScale * 100) + '%';
     };
