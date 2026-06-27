@@ -3912,7 +3912,7 @@ async function enhanceDisplayMath() {
       const m = el.textContent.trim().match(/^\$\$(.+)\$\$$/);
       if (m) {
         const math = m[1].trim();
-        if (math) { try { el.innerHTML = katex.renderToString(math, { displayMode: true, throwOnError: false, output: 'htmlAndMathml' }); } catch(e) {} }
+        if (math) { try { el.innerHTML = katex.renderToString(math, { displayMode: true, throwOnError: false }); el.setAttribute('data-tex', math); } catch(e) {} }
       }
     }
   }
@@ -3928,9 +3928,10 @@ async function enhanceDisplayMath() {
           const math = parts.join('\n').trim();
           if (math) {
             try {
-              const html = katex.renderToString(math, { displayMode: true, throwOnError: false, output: 'htmlAndMathml' });
+              const html = katex.renderToString(math, { displayMode: true, throwOnError: false });
               const div = document.createElement('div');
               div.innerHTML = html;
+              div.setAttribute('data-tex', math);
               el.replaceWith(div);
               next.remove();
               for (let k = i + 1; k < j; k++) children[k] && children[k].remove();
@@ -3972,7 +3973,7 @@ async function enhanceInlineMath() {
       found = true;
       parts.push(text.slice(last, match.index));
       try {
-        parts.push(katex.renderToString(expr, { displayMode: false, throwOnError: false, output: 'htmlAndMathml' }));
+        parts.push('<span data-tex="' + escapeHtml(expr) + '">' + katex.renderToString(expr, { displayMode: false, throwOnError: false }) + '</span>');
       } catch(e) { parts.push('$' + expr + '$'); }
       last = match.index + match[0].length;
     }
@@ -4227,29 +4228,36 @@ function htmlToMarkdown(el) {
       md += node.textContent;
     } else if (node.nodeType === 1) {
       var tag = node.tagName.toLowerCase();
-      // KaTeX: try annotation first, fallback to text placeholder
+      // KaTeX: extract LaTeX from data-tex attribute (set during rendering)
       if (node.classList && (node.classList.contains('katex') || node.classList.contains('katex-display'))) {
-        var ann = node.querySelector('annotation[encoding="application/x-tex"]') || node.querySelector('annotation');
-        if (ann) {
-          var tex = ann.textContent.trim();
+        var texAttr = node.getAttribute('data-tex') || (node.parentElement && node.parentElement.getAttribute('data-tex'));
+        if (texAttr) {
           if (node.classList.contains('katex-display')) {
-            md += '\n$$' + tex + '$$\n\n';
+            md += '\n$$' + texAttr.trim() + '$$\n\n';
           } else {
-            md += '$' + tex + '$';
+            md += '$' + texAttr.trim() + '$';
           }
           continue;
         }
-        // No annotation — use visible text as fallback
+        // Fallback: try annotation
+        var ann = node.querySelector('annotation');
+        if (ann) {
+          var tex = ann.textContent.trim();
+          md += node.classList.contains('katex-display') ? '\n$$' + tex + '$$\n\n' : '$' + tex + '$';
+          continue;
+        }
+        // Fallback: visible text (imperfect)
         var katexHtml = node.querySelector('.katex-html');
         var katexText = katexHtml ? katexHtml.textContent.trim() : node.textContent.trim();
         if (katexText) {
-          if (node.classList.contains('katex-display')) {
-            md += '\n$$' + katexText + '$$\n\n';
-          } else {
-            md += '$' + katexText + '$';
-          }
+          md += node.classList.contains('katex-display') ? '\n$$' + katexText + '$$\n\n' : '$' + katexText + '$';
           continue;
         }
+      }
+      // data-tex on span wrapper (inline math)
+      if (node.getAttribute && node.getAttribute('data-tex')) {
+        md += '$' + node.getAttribute('data-tex').trim() + '$';
+        continue;
       }
       var inner = htmlToMarkdown(node);
       if (tag === 'h1') md += '\n# ' + inner.trim() + '\n\n';
