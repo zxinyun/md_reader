@@ -783,6 +783,9 @@ body.auto .search-active { background: #ff6b35; color: #fff; }
   <button class="toolbar-btn" id="tbFullscreen" data-action="fullscreen">
     <span class="icon">⛶</span><span>全屏</span>
   </button>
+  <button class="toolbar-btn" id="tbAbout" data-action="about">
+    <span class="icon">ℹ</span><span>关于</span>
+  </button>
 </nav>
 
 <!-- Bottom Sheet (Theme/Font Settings) -->
@@ -4224,14 +4227,18 @@ function htmlToMarkdown(el) {
       md += node.textContent;
     } else if (node.nodeType === 1) {
       var tag = node.tagName.toLowerCase();
-      // KaTeX: extract LaTeX from <annotation> element
-      if (node.classList && node.classList.contains('katex-display')) {
-        var ann = node.querySelector('annotation');
-        if (ann) { md += '\n$$' + ann.textContent.trim() + '$$\n\n'; continue; }
-      }
-      if (node.classList && node.classList.contains('katex') && !(node.parentNode && node.parentNode.classList && node.parentNode.classList.contains('katex-display'))) {
-        var ann = node.querySelector('annotation');
-        if (ann) { md += '$' + ann.textContent.trim() + '$'; continue; }
+      // KaTeX: extract LaTeX from <annotation> inside <math> → <semantics>
+      if (node.classList && (node.classList.contains('katex') || node.classList.contains('katex-display'))) {
+        var ann = node.querySelector('annotation[encoding="application/x-tex"]') || node.querySelector('annotation');
+        if (ann) {
+          var tex = ann.textContent.trim();
+          if (node.classList.contains('katex-display')) {
+            md += '\n$$' + tex + '$$\n\n';
+          } else {
+            md += '$' + tex + '$';
+          }
+          continue;
+        }
       }
       var inner = htmlToMarkdown(node);
       if (tag === 'h1') md += '\n# ' + inner.trim() + '\n\n';
@@ -4725,9 +4732,8 @@ async function exportAsImage(mode) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     showToast(`已导出 ${sections.length} 张分段截图`);
   } else if (mode === 'pdf') {
-    // Export as PDF via browser print dialog
+    // Export as PDF via hidden iframe + print
     const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]')).map(el => el.outerHTML).join('\n');
-    // Get rendered content - handle iframe (HTML files) separately
     var content = '';
     if (state.fileType === 'html' && htmlFrame.style.display !== 'none') {
       try {
@@ -4737,13 +4743,19 @@ async function exportAsImage(mode) {
     } else {
       content = target.innerHTML;
     }
-    const htmlDoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${state.fileName || '导出'}</title>${styles}<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:800px;margin:0 auto;padding:20px;color:#333;line-height:1.7}img{max-width:100%;height:auto}pre{white-space:pre-wrap;word-break:break-all}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:6px 10px}th{background:#f5f5f5}@media print{body{padding:0;margin:0 auto}pre{white-space:pre-wrap}}</style></head><body>${content}</body></html>`;
-    const blob = new Blob([htmlDoc], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const printWin = window.open(url, '_blank');
-    if (!printWin) { URL.revokeObjectURL(url); showToast('弹窗被阻止，请允许弹窗后重试'); return; }
-    printWin.onload = function() {
-      setTimeout(function() { printWin.print(); URL.revokeObjectURL(url); }, 800);
+    const htmlDoc = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + (state.fileName || '导出') + '</title>' + styles + '<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:800px;margin:0 auto;padding:20px;color:#333;line-height:1.7}img{max-width:100%;height:auto}pre{white-space:pre-wrap;word-break:break-all}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:6px 10px}th{background:#f5f5f5}@media print{body{padding:0;margin:0 auto}pre{white-space:pre-wrap}}</style></head><body>' + content + '</body></html>';
+    var iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;height:600px;border:none;';
+    document.body.appendChild(iframe);
+    var iDoc = iframe.contentDocument || iframe.contentWindow.document;
+    iDoc.open();
+    iDoc.write(htmlDoc);
+    iDoc.close();
+    iframe.onload = function() {
+      setTimeout(function() {
+        try { iframe.contentWindow.print(); } catch(e) { showToast('打印失败'); }
+        setTimeout(function() { document.body.removeChild(iframe); }, 1000);
+      }, 800);
     };
     showToast('请在打印对话框中选择"另存为 PDF"');
   }
@@ -6400,6 +6412,8 @@ $('tbFullscreen').addEventListener('click', () => {
     showToast('退出全屏');
   }
 });
+
+$('tbAbout').addEventListener('click', showAboutDialog);
 
 // ===== Scroll Buttons =====
 function scrollContentTo(direction) {
