@@ -784,9 +784,6 @@ body.auto .search-active { background: #ff6b35; color: #fff; }
   <button class="toolbar-btn" id="tbFullscreen" data-action="fullscreen">
     <span class="icon">⛶</span><span>全屏</span>
   </button>
-  <button class="toolbar-btn" id="tbAbout" data-action="about">
-    <span class="icon">ℹ</span><span>关于</span>
-  </button>
 </nav>
 
 <!-- Bottom Sheet (Theme/Font Settings) -->
@@ -3916,9 +3913,11 @@ function buildMdOutline() {
 
 async function enhanceMdContent() {
   if (state.fileType !== 'md') return;
+  await new Promise(r => setTimeout(r, 0));
   try { await renderMathFromDataTex(); } catch(e) {}
   try { await enhanceDisplayMath(); } catch(e) {}
   try { await enhanceInlineMath(); } catch(e) {}
+  await new Promise(r => setTimeout(r, 0));
   try { await enhanceSyntaxHighlighting(); } catch(e) {}
   try { await enhanceMermaid(); } catch(e) {}
 }
@@ -3927,21 +3926,27 @@ async function enhanceMdContent() {
 async function renderMathFromDataTex() {
   await ensureKaTeX();
   // Display math
-  mdContent.querySelectorAll('div.katex-display[data-tex]').forEach(function(el) {
+  var dispEls = mdContent.querySelectorAll('div.katex-display[data-tex]');
+  for (var i = 0; i < dispEls.length; i++) {
     try {
+      var el = dispEls[i];
       var tex = el.getAttribute('data-tex');
       el.innerHTML = katex.renderToString(tex, { displayMode: true, throwOnError: false });
       el.setAttribute('data-tex', tex);
     } catch(e) {}
-  });
+    if (i % 5 === 0) await new Promise(r => setTimeout(r, 0));
+  }
   // Inline math
-  mdContent.querySelectorAll('span.katex-inline[data-tex]').forEach(function(el) {
+  var inlEls = mdContent.querySelectorAll('span.katex-inline[data-tex]');
+  for (var j = 0; j < inlEls.length; j++) {
     try {
+      var el = inlEls[j];
       var tex = el.getAttribute('data-tex');
       el.innerHTML = katex.renderToString(tex, { displayMode: false, throwOnError: false });
       el.setAttribute('data-tex', tex);
     } catch(e) {}
-  });
+    if (j % 5 === 0) await new Promise(r => setTimeout(r, 0));
+  }
 }
 
 async function enhanceDisplayMath() {
@@ -5036,13 +5041,18 @@ $('openBtn').addEventListener('click', async () => {
     } catch(e) { console.warn('注册失败:', _fd.name, e); }
   }
   if (_count) {
+    // Find the last UNLOADED file to open (don't re-open already loaded files)
+    var _targetIdx = state.importedFiles.length - 1;
+    while (_targetIdx >= 0 && state.importedFiles[_targetIdx].content !== null) _targetIdx--;
+    if (_targetIdx < 0) _targetIdx = state.importedFiles.length - 1;
     // Rebuild image list if currently viewing images
     if (state.fileType === 'img') {
       buildImageList(null).then(function() {
-        openImportedFile(state.importedFiles.length - 1);
+        openImportedFile(_targetIdx);
       });
     } else {
-      await openImportedFile(state.importedFiles.length - 1);
+      await openImportedFile(_targetIdx);
+    }
     }
     showToast(`已打开 ${_count} 个文件`);
   }
@@ -6477,8 +6487,6 @@ $('tbFullscreen').addEventListener('click', () => {
   }
 });
 
-$('tbAbout').addEventListener('click', showAboutDialog);
-
 // ===== Scroll Buttons =====
 function scrollContentTo(direction) {
   scrollContentToPos(direction === 'top' ? 0 : Infinity, direction === 'top' ? 'auto' : 'smooth');
@@ -6551,11 +6559,12 @@ function showMenuSheet() {
         ${hasSheets ? `<button class="theme-opt menu-act" data-act="sheets">📊 切换工作表</button>` : ''}
         <button class="theme-opt menu-act" data-act="url">🌐 浏览网址</button>
         <button class="theme-opt menu-act" data-act="debug">🔧 调试日志</button>
-        ` : `
         <button class="theme-opt menu-act" data-act="about">ℹ️ 关于</button>
-        <button class="theme-opt menu-act" data-act="url">🌐 浏览网址</button>
+        ` : `
         <button class="theme-opt menu-act" data-act="open">📂 打开文件</button>
+        <button class="theme-opt menu-act" data-act="url">🌐 浏览网址</button>
         <button class="theme-opt menu-act" data-act="debug">🔧 调试日志</button>
+        <button class="theme-opt menu-act" data-act="about">ℹ️ 关于</button>
         `}
       </div>
     </div>
