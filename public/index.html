@@ -2920,10 +2920,69 @@ async function renderDoc(arrayBuffer) {
     } catch(e) {}
   }
 
-  // Real binary .doc — try to extract text content
+  // Real binary .doc — try CFB-based extraction, then fallback to binary scan
   try {
-    _d('[DOC] trying binary .doc text extraction...');
+    _d('[DOC] trying CFB-based .doc extraction...');
     showLoading('正在解析 .doc 文档...', true);
+    if (typeof CFB === 'undefined') {
+      await loadScript('https://cdn.jsdelivr.net/npm/cfb@1.2.2/dist/cfb.min.js');
+    }
+    const ole = CFB.read(new Uint8Array(arrayBuffer), { type: 'array' });
+    // Try to find the main document stream
+    var docText = '';
+    var streamNames = ['WordDocument', '1Table', '0Table'];
+    for (var si = 0; si < streamNames.length; si++) {
+      var entry = CFB.find(ole, '/' + streamNames[si]);
+      if (entry && entry.content) {
+        // Extract readable text from Word stream (UTF-16LE encoded)
+        var data = entry.content;
+        var txt = '';
+        for (var i = 0; i < data.length - 1; i += 2) {
+          var code = data[i] | (data[i + 1] << 8);
+          if (code >= 0x20 && code < 0x7F || code >= 0x4E00 && code <= 0x9FFF || code >= 0x3000 && code <= 0x303F || code === 0x0A || code === 0x0D) {
+            txt += String.fromCharCode(code);
+          }
+        }
+        if (txt.length > docText.length) docText = txt;
+      }
+    }
+    // Also try all entries for readable text
+    if (docText.length < 50 && ole.FullPaths) {
+      ole.FullPaths.forEach(function(path) {
+        try {
+          var e = CFB.find(ole, path);
+          if (e && e.content && e.content.length > 20) {
+            var data = e.content;
+            var txt = '';
+            for (var i = 0; i < Math.min(data.length - 1, 50000); i += 2) {
+              var code = data[i] | (data[i + 1] << 8);
+              if (code >= 0x20 && code < 0x7F || code >= 0x4E00 && code <= 0x9FFF || code === 0x0A || code === 0x0D) {
+                txt += String.fromCharCode(code);
+              }
+            }
+            if (txt.length > docText.length) docText = txt;
+          }
+        } catch(ex) {}
+      });
+    }
+    if (docText.length > 20) {
+      // Clean up: remove excessive whitespace
+      docText = docText.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '').replace(/\n{3,}/g, '\n\n').trim();
+      showContent();
+      mdContent.style.display = 'block';
+      mdContent.innerHTML = `<div style="padding:16px;background:var(--bg-card);border-radius:var(--radius-sm);white-space:pre-wrap;font-family:var(--font-body);line-height:1.8;">${escapeHtml(docText)}</div>`;
+      buildWordOutline();
+      showToast(`已提取文本: ${state.fileName}（格式可能不完整）`);
+      reapplyZoom();
+      return;
+    }
+  } catch(e) {
+    _d('[DOC] CFB extraction failed: ' + (e.message || e));
+  }
+
+  // Fallback: simple binary scan
+  try {
+    _d('[DOC] trying extractTextFromBinaryDoc fallback...');
     const text = extractTextFromBinaryDoc(arrayBuffer);
     _d('[DOC] extractTextFromBinaryDoc result length=' + (text ? text.length : 0));
     if (text && text.trim().length > 10) {
@@ -3647,6 +3706,25 @@ function navigateImage(dir) {
       hideLoading();
       showImgPreview(buf, f.ext, f.name);
     }).catch(() => { hideLoading(); showToast('加载失败'); });
+  } else {
+    // Try lazy load from importedFiles _fileRef
+    var imported = state.importedFiles.find(function(x) { return x.name === f.name; });
+    if (imported && imported._fileRef && !imported.content) {
+      showLoading('加载中...');
+      readFileBlob(imported._fileRef, true).then(function(buf) {
+        imported.content = buf;
+        f.content = buf; f.loaded = true;
+        state.fileContent = buf;
+        hideLoading();
+        showImgPreview(buf, f.ext, f.name);
+      }).catch(function() { hideLoading(); showToast('加载失败: ' + f.name); });
+    } else if (imported && imported.content) {
+      f.content = imported.content; f.loaded = true;
+      state.fileContent = imported.content;
+      showImgPreview(imported.content, f.ext, f.name);
+    } else {
+      showToast('无法加载: ' + f.name);
+    }
   }
 }
 function navigateDoc(dir) {
