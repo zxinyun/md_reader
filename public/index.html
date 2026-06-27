@@ -2957,42 +2957,44 @@ async function renderDoc(arrayBuffer) {
       await loadScript('https://cdn.jsdelivr.net/npm/cfb@1.2.2/dist/cfb.min.js');
     }
     const ole = CFB.read(new Uint8Array(arrayBuffer), { type: 'array' });
-    // Skip metadata streams, focus on document content
-    var skipStreams = /^(CompObj|SummaryInformation|DocumentSummaryInformation|[\x01\x05]Table|Data|1Table|0Table|ObjectPool)$/i;
-    var docText = '';
+    var skipStreams = /^(CompObj|SummaryInformation|DocumentSummaryInformation|ObjectPool|[\x00-\x1f])/i;
+    var bestText = '';
     if (ole.FileIndex) {
       for (var fi = 0; fi < ole.FileIndex.length; fi++) {
         var entry = ole.FileIndex[fi];
-        if (!entry || !entry.content || entry.content.length < 40) continue;
-        var name = ole.FullPaths[fi] || '';
-        if (skipStreams.test(name.replace(/^.*\//, ''))) continue;
+        if (!entry || !entry.content || entry.content.length < 80) continue;
+        var name = (ole.FullPaths[fi] || '').replace(/^.*\//, '');
+        if (skipStreams.test(name)) continue;
         var data = entry.content;
-        var txt = '';
-        var prevWasSpace = false;
-        // Try UTF-16LE extraction with better filtering
+        // Strategy 1: UTF-16LE extraction with strict word validation
+        var words = [];
+        var word = '';
         for (var i = 0; i < data.length - 1; i += 2) {
           var code = data[i] | (data[i + 1] << 8);
-          if (code === 0x0D || code === 0x0A) {
-            if (!prevWasSpace) { txt += '\n'; prevWasSpace = true; }
-          } else if (code === 0x20) {
-            if (!prevWasSpace) { txt += ' '; prevWasSpace = true; }
-          } else if ((code >= 0x21 && code <= 0x7E) || (code >= 0x4E00 && code <= 0x9FFF) || (code >= 0x3000 && code <= 0x303F) || (code >= 0xFF00 && code <= 0xFFEF) || (code >= 0x00C0 && code <= 0x024F)) {
-            txt += String.fromCharCode(code);
-            prevWasSpace = false;
+          if ((code >= 0x41 && code <= 0x5A) || (code >= 0x61 && code <= 0x7A) || (code >= 0x4E00 && code <= 0x9FFF) || (code >= 0x3000 && code <= 0x303F) || (code >= 0xFF00 && code <= 0xFFEF) || (code >= 0x00C0 && code <= 0x024F)) {
+            word += String.fromCharCode(code);
+          } else {
+            if (word.length >= 2) words.push(word);
+            if (code === 0x20 || code === 0x0D || code === 0x0A) words.push(' ');
+            word = '';
           }
         }
-        // Only keep if it looks like real text (has spaces, reasonable length)
-        if (txt.length > 50 && txt.includes(' ')) {
-          // Clean: remove runs of single chars that look like binary noise
-          txt = txt.replace(/(.)(?=\1{5,})/g, '').replace(/\n{3,}/g, '\n\n').trim();
-          if (txt.length > docText.length) docText = txt;
+        if (word.length >= 2) words.push(word);
+        var txt = words.join('').replace(/\s+/g, ' ').trim();
+        // Validate: must have real words (3+ letter sequences with vowels)
+        var realWords = txt.match(/[a-zA-Z]{3,}/g) || [];
+        var hasVowels = realWords.filter(function(w) { return /[aeiouAEIOU]/.test(w); }).length;
+        if (txt.length > 50 && hasVowels >= 3 && txt.length > bestText.length) {
+          // Post-clean: remove isolated single chars and binary noise
+          txt = txt.replace(/\b[a-zA-Z0-9]\b/g, '').replace(/\s+/g, ' ').trim();
+          bestText = txt;
         }
       }
     }
-    if (docText.length > 30) {
+    if (bestText.length > 30) {
       showContent();
       mdContent.style.display = 'block';
-      mdContent.innerHTML = `<div style="padding:16px;background:var(--bg-card);border-radius:var(--radius-sm);white-space:pre-wrap;font-family:var(--font-body);line-height:1.8;">${escapeHtml(docText)}</div>`;
+      mdContent.innerHTML = `<div style="padding:16px;background:var(--bg-card);border-radius:var(--radius-sm);white-space:pre-wrap;font-family:var(--font-body);line-height:1.8;">${escapeHtml(bestText)}</div>`;
       buildWordOutline();
       showToast(`已提取文本: ${state.fileName}（格式可能不完整）`);
       reapplyZoom();
@@ -3027,32 +3029,31 @@ async function renderDoc(arrayBuffer) {
 }
 
 function extractTextFromBinaryDoc(arrayBuffer) {
-  // Simple binary .doc text extraction: scan for UTF-16LE text sequences
   const bytes = new Uint8Array(arrayBuffer);
-  var texts = [];
-  var current = '';
-  for (var i = 0; i < bytes.length - 1; i++) {
+  var words = [];
+  var word = '';
+  for (var i = 0; i < bytes.length - 1; i += 2) {
     var lo = bytes[i];
     var hi = bytes[i + 1];
-    // Check for printable ASCII or common CJK ranges in UTF-16LE
-    if (hi === 0x00 && lo >= 0x20 && lo < 0x7F) {
-      current += String.fromCharCode(lo);
-    } else if (lo >= 0x4E00 && lo <= 0x9FFF && hi === 0x00) {
-      // CJK unified ideographs
-      current += String.fromCharCode(lo);
-    } else if (lo >= 0x3000 && lo <= 0x303F && hi === 0x00) {
-      // CJK symbols and punctuation
-      current += String.fromCharCode(lo);
-    } else if (lo >= 0xFF00 && lo <= 0xFFEF) {
-      // Fullwidth forms
-      current += String.fromCharCode(lo - 0xFEE0);
+    var code = lo | (hi << 8);
+    if ((code >= 0x41 && code <= 0x5A) || (code >= 0x61 && code <= 0x7A) || (code >= 0x4E00 && code <= 0x9FFF) || (code >= 0x3000 && code <= 0x303F) || (code >= 0xFF00 && code <= 0xFFEF) || (code >= 0x00C0 && code <= 0x024F)) {
+      word += String.fromCharCode(code);
     } else {
-      if (current.length > 3) texts.push(current);
-      current = '';
+      if (word.length >= 2) words.push(word);
+      if (code === 0x0020 || code === 0x000D || code === 0x000A) words.push(' ');
+      word = '';
     }
   }
-  if (current.length > 3) texts.push(current);
-  return texts.join('\n');
+  if (word.length >= 2) words.push(word);
+  var txt = words.join('').replace(/\s+/g, ' ').trim();
+  // Validate: must have real words
+  var realWords = txt.match(/[a-zA-Z]{3,}/g) || [];
+  var hasVowels = realWords.filter(function(w) { return /[aeiouAEIOU]/.test(w); }).length;
+  if (txt.length > 50 && hasVowels >= 3) {
+    txt = txt.replace(/\b[a-zA-Z0-9]\b/g, '').replace(/\s+/g, ' ').trim();
+    return txt;
+  }
+  return '';
 }
 
 function buildWordOutline() {
