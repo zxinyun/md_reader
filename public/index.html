@@ -2966,27 +2966,21 @@ async function renderDoc(arrayBuffer) {
         var name = (ole.FullPaths[fi] || '').replace(/^.*\//, '');
         if (skipStreams.test(name)) continue;
         var data = entry.content;
-        // Strategy 1: UTF-16LE extraction with strict word validation
-        var words = [];
-        var word = '';
+        // Extract long UTF-16LE text sequences (10+ consecutive printable chars)
+        var segments = [];
+        var seg = '';
         for (var i = 0; i < data.length - 1; i += 2) {
           var code = data[i] | (data[i + 1] << 8);
-          if ((code >= 0x41 && code <= 0x5A) || (code >= 0x61 && code <= 0x7A) || (code >= 0x4E00 && code <= 0x9FFF) || (code >= 0x3000 && code <= 0x303F) || (code >= 0xFF00 && code <= 0xFFEF) || (code >= 0x00C0 && code <= 0x024F)) {
-            word += String.fromCharCode(code);
+          if (code >= 0x20 && code <= 0x7E || code >= 0x4E00 && code <= 0x9FFF || code >= 0x3000 && code <= 0x303F || code >= 0xFF00 && code <= 0xFFEF || code >= 0x00C0 && code <= 0x024F || code === 0x0D || code === 0x0A) {
+            seg += String.fromCharCode(code);
           } else {
-            if (word.length >= 2) words.push(word);
-            if (code === 0x20 || code === 0x0D || code === 0x0A) words.push(' ');
-            word = '';
+            if (seg.replace(/[\s\n\r]/g, '').length >= 10) segments.push(seg);
+            seg = '';
           }
         }
-        if (word.length >= 2) words.push(word);
-        var txt = words.join('').replace(/\s+/g, ' ').trim();
-        // Validate: must have real words (3+ letter sequences with vowels)
-        var realWords = txt.match(/[a-zA-Z]{3,}/g) || [];
-        var hasVowels = realWords.filter(function(w) { return /[aeiouAEIOU]/.test(w); }).length;
-        if (txt.length > 50 && hasVowels >= 3 && txt.length > bestText.length) {
-          // Post-clean: remove isolated single chars and binary noise
-          txt = txt.replace(/\b[a-zA-Z0-9]\b/g, '').replace(/\s+/g, ' ').trim();
+        if (seg.replace(/[\s\n\r]/g, '').length >= 10) segments.push(seg);
+        var txt = segments.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+        if (txt.length > 50 && txt.length > bestText.length) {
           bestText = txt;
         }
       }
@@ -3030,30 +3024,20 @@ async function renderDoc(arrayBuffer) {
 
 function extractTextFromBinaryDoc(arrayBuffer) {
   const bytes = new Uint8Array(arrayBuffer);
-  var words = [];
-  var word = '';
+  var segments = [];
+  var seg = '';
   for (var i = 0; i < bytes.length - 1; i += 2) {
-    var lo = bytes[i];
-    var hi = bytes[i + 1];
-    var code = lo | (hi << 8);
-    if ((code >= 0x41 && code <= 0x5A) || (code >= 0x61 && code <= 0x7A) || (code >= 0x4E00 && code <= 0x9FFF) || (code >= 0x3000 && code <= 0x303F) || (code >= 0xFF00 && code <= 0xFFEF) || (code >= 0x00C0 && code <= 0x024F)) {
-      word += String.fromCharCode(code);
+    var code = bytes[i] | (bytes[i + 1] << 8);
+    if (code >= 0x20 && code <= 0x7E || code >= 0x4E00 && code <= 0x9FFF || code >= 0x3000 && code <= 0x303F || code >= 0xFF00 && code <= 0xFFEF || code >= 0x00C0 && code <= 0x024F || code === 0x0D || code === 0x0A) {
+      seg += String.fromCharCode(code);
     } else {
-      if (word.length >= 2) words.push(word);
-      if (code === 0x0020 || code === 0x000D || code === 0x000A) words.push(' ');
-      word = '';
+      if (seg.replace(/[\s\n\r]/g, '').length >= 10) segments.push(seg);
+      seg = '';
     }
   }
-  if (word.length >= 2) words.push(word);
-  var txt = words.join('').replace(/\s+/g, ' ').trim();
-  // Validate: must have real words
-  var realWords = txt.match(/[a-zA-Z]{3,}/g) || [];
-  var hasVowels = realWords.filter(function(w) { return /[aeiouAEIOU]/.test(w); }).length;
-  if (txt.length > 50 && hasVowels >= 3) {
-    txt = txt.replace(/\b[a-zA-Z0-9]\b/g, '').replace(/\s+/g, ' ').trim();
-    return txt;
-  }
-  return '';
+  if (seg.replace(/[\s\n\r]/g, '').length >= 10) segments.push(seg);
+  var txt = segments.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  return txt.length > 30 ? txt : '';
 }
 
 function buildWordOutline() {
