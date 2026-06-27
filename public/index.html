@@ -93,6 +93,7 @@ body {
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; -webkit-tap-highlight-color: transparent;
   position: relative; transition: background 0.2s;
+  overflow: hidden; flex-shrink: 0;
 }
 .header-btn:active { background: var(--primary-light); }
 
@@ -2261,6 +2262,32 @@ async function renderPdfWithPdfJs(buf) {
       currentPage = newPage;
       renderAllPages().then(renderThumbnails);
     };
+    function saveRotatedPage() {
+      var pd = pageCanvases[0];
+      if (!pd) { showToast('没有可保存的页面'); return; }
+      var srcCanvas = pd.canvas;
+      var c = document.createElement('canvas');
+      var w = srcCanvas.width, h = srcCanvas.height;
+      // Swap dimensions for 90/270 rotation
+      if (rotation % 180 !== 0) { c.width = h; c.height = w; } else { c.width = w; c.height = h; }
+      var ctx = c.getContext('2d');
+      ctx.save();
+      ctx.translate(c.width / 2, c.height / 2);
+      if (mirror) ctx.scale(-1, 1);
+      if (vMirror) ctx.scale(1, -1);
+      if (rotation !== 0) ctx.rotate(rotation * Math.PI / 180);
+      ctx.drawImage(srcCanvas, -w / 2, -h / 2);
+      ctx.restore();
+      c.toBlob(function(blob) {
+        if (!blob) { showToast('保存失败'); return; }
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = (state.fileName || 'page') + '_p' + currentPage + '_rotated.png';
+        a.click();
+        URL.revokeObjectURL(a.href);
+        showToast('已保存第 ' + currentPage + ' 页');
+      }, 'image/png');
+    }
     // Delay first render so container has layout dimensions
     setTimeout(function() { renderAllPages().then(renderThumbnails); }, 50);
     document.getElementById('pdfThumbs').addEventListener('click', function() {
@@ -2283,7 +2310,8 @@ async function renderPdfWithPdfJs(buf) {
         { text: '↺ 左旋90°', action: function() { rotation = (rotation - 90 + 360) % 360; renderAllPages(); showToast('已左旋 ' + rotation + '°'); } },
         { text: '↻ 右旋90°', action: function() { rotation = (rotation + 90) % 360; renderAllPages(); showToast('已右旋 ' + rotation + '°'); } },
         { text: '↔ 水平镜像', action: function() { mirror = !mirror; renderAllPages(); showToast(mirror ? '已水平镜像' : '已取消镜像'); } },
-        { text: '↕ 垂直镜像', action: function() { vMirror = !vMirror; renderAllPages(); showToast(vMirror ? '已垂直镜像' : '已取消垂直镜像'); } }
+        { text: '↕ 垂直镜像', action: function() { vMirror = !vMirror; renderAllPages(); showToast(vMirror ? '已垂直镜像' : '已取消垂直镜像'); } },
+        { text: '💾 保存当前页', action: function() { saveRotatedPage(); } }
       ];
       items.forEach(function(item) {
         var b = document.createElement('button');
@@ -2920,7 +2948,7 @@ async function renderDoc(arrayBuffer) {
     } catch(e) {}
   }
 
-  // Real binary .doc — try CFB-based extraction, then fallback to binary scan
+  // Real binary .doc — try CFB-based extraction
   try {
     _d('[DOC] trying CFB-based .doc extraction...');
     showLoading('正在解析 .doc 文档...', true);
@@ -2928,46 +2956,39 @@ async function renderDoc(arrayBuffer) {
       await loadScript('https://cdn.jsdelivr.net/npm/cfb@1.2.2/dist/cfb.min.js');
     }
     const ole = CFB.read(new Uint8Array(arrayBuffer), { type: 'array' });
-    // Try to find the main document stream
+    // Skip metadata streams, focus on document content
+    var skipStreams = /^(CompObj|SummaryInformation|DocumentSummaryInformation|[\x01\x05]Table|Data|1Table|0Table|ObjectPool)$/i;
     var docText = '';
-    var streamNames = ['WordDocument', '1Table', '0Table'];
-    for (var si = 0; si < streamNames.length; si++) {
-      var entry = CFB.find(ole, '/' + streamNames[si]);
-      if (entry && entry.content) {
-        // Extract readable text from Word stream (UTF-16LE encoded)
+    if (ole.FileIndex) {
+      for (var fi = 0; fi < ole.FileIndex.length; fi++) {
+        var entry = ole.FileIndex[fi];
+        if (!entry || !entry.content || entry.content.length < 40) continue;
+        var name = ole.FullPaths[fi] || '';
+        if (skipStreams.test(name.replace(/^.*\//, ''))) continue;
         var data = entry.content;
         var txt = '';
+        var prevWasSpace = false;
+        // Try UTF-16LE extraction with better filtering
         for (var i = 0; i < data.length - 1; i += 2) {
           var code = data[i] | (data[i + 1] << 8);
-          if (code >= 0x20 && code < 0x7F || code >= 0x4E00 && code <= 0x9FFF || code >= 0x3000 && code <= 0x303F || code === 0x0A || code === 0x0D) {
+          if (code === 0x0D || code === 0x0A) {
+            if (!prevWasSpace) { txt += '\n'; prevWasSpace = true; }
+          } else if (code === 0x20) {
+            if (!prevWasSpace) { txt += ' '; prevWasSpace = true; }
+          } else if ((code >= 0x21 && code <= 0x7E) || (code >= 0x4E00 && code <= 0x9FFF) || (code >= 0x3000 && code <= 0x303F) || (code >= 0xFF00 && code <= 0xFFEF) || (code >= 0x00C0 && code <= 0x024F)) {
             txt += String.fromCharCode(code);
+            prevWasSpace = false;
           }
         }
-        if (txt.length > docText.length) docText = txt;
+        // Only keep if it looks like real text (has spaces, reasonable length)
+        if (txt.length > 50 && txt.includes(' ')) {
+          // Clean: remove runs of single chars that look like binary noise
+          txt = txt.replace(/(.)(?=\1{5,})/g, '').replace(/\n{3,}/g, '\n\n').trim();
+          if (txt.length > docText.length) docText = txt;
+        }
       }
     }
-    // Also try all entries for readable text
-    if (docText.length < 50 && ole.FullPaths) {
-      ole.FullPaths.forEach(function(path) {
-        try {
-          var e = CFB.find(ole, path);
-          if (e && e.content && e.content.length > 20) {
-            var data = e.content;
-            var txt = '';
-            for (var i = 0; i < Math.min(data.length - 1, 50000); i += 2) {
-              var code = data[i] | (data[i + 1] << 8);
-              if (code >= 0x20 && code < 0x7F || code >= 0x4E00 && code <= 0x9FFF || code === 0x0A || code === 0x0D) {
-                txt += String.fromCharCode(code);
-              }
-            }
-            if (txt.length > docText.length) docText = txt;
-          }
-        } catch(ex) {}
-      });
-    }
-    if (docText.length > 20) {
-      // Clean up: remove excessive whitespace
-      docText = docText.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '').replace(/\n{3,}/g, '\n\n').trim();
+    if (docText.length > 30) {
       showContent();
       mdContent.style.display = 'block';
       mdContent.innerHTML = `<div style="padding:16px;background:var(--bg-card);border-radius:var(--radius-sm);white-space:pre-wrap;font-family:var(--font-body);line-height:1.8;">${escapeHtml(docText)}</div>`;
@@ -3694,37 +3715,36 @@ function navigateImage(dir) {
   state.fileExt = f.ext;
   titleDisplay.textContent = f.name;
   try { localStorage.setItem('reader-last-session', JSON.stringify({ name: f.name, type: 'img', ext: f.ext, timestamp: Date.now() })); } catch(e) {}
-  if (f.loaded && f.content) {
+  // Always check importedFiles for latest content (handles re-load and lazy load)
+  var imported = state.importedFiles.find(function(x) { return x.name === f.name; });
+  if (imported && imported.content) {
+    f.content = imported.content; f.loaded = true;
+    state.fileContent = imported.content;
+    showImgPreview(imported.content, f.ext, f.name);
+  } else if (f.loaded && f.content) {
     state.fileContent = f.content;
     showImgPreview(f.content, f.ext, f.name);
+  } else if (imported && imported._fileRef) {
+    showLoading('加载 ' + f.name + '...');
+    readFileBlob(imported._fileRef, true).then(function(buf) {
+      if (!buf || buf.byteLength === 0) { hideLoading(); showToast('无法加载: ' + f.name); return; }
+      imported.content = buf;
+      f.content = buf; f.loaded = true;
+      state.fileContent = buf;
+      hideLoading();
+      showImgPreview(buf, f.ext, f.name);
+    }).catch(function() { hideLoading(); showToast('加载失败: ' + f.name); });
   } else if (f.path) {
-    showLoading('加载中...');
+    showLoading('加载 ' + f.name + '...');
     FileAPI.readAsArrayBuffer({ _path: f.path, name: f.name }).then(buf => {
       if (!buf || buf.byteLength === 0) { hideLoading(); showToast('无法加载: ' + f.name); return; }
       f.content = buf; f.loaded = true;
       state.fileContent = buf;
       hideLoading();
       showImgPreview(buf, f.ext, f.name);
-    }).catch(() => { hideLoading(); showToast('加载失败'); });
+    }).catch(() => { hideLoading(); showToast('加载失败: ' + f.name); });
   } else {
-    // Try lazy load from importedFiles _fileRef
-    var imported = state.importedFiles.find(function(x) { return x.name === f.name; });
-    if (imported && imported._fileRef && !imported.content) {
-      showLoading('加载中...');
-      readFileBlob(imported._fileRef, true).then(function(buf) {
-        imported.content = buf;
-        f.content = buf; f.loaded = true;
-        state.fileContent = buf;
-        hideLoading();
-        showImgPreview(buf, f.ext, f.name);
-      }).catch(function() { hideLoading(); showToast('加载失败: ' + f.name); });
-    } else if (imported && imported.content) {
-      f.content = imported.content; f.loaded = true;
-      state.fileContent = imported.content;
-      showImgPreview(imported.content, f.ext, f.name);
-    } else {
-      showToast('无法加载: ' + f.name);
-    }
+    showToast('无法加载: ' + f.name);
   }
 }
 function navigateDoc(dir) {
@@ -4855,7 +4875,14 @@ $('openBtn').addEventListener('click', async () => {
     } catch(e) { console.warn('注册失败:', _fd.name, e); }
   }
   if (_count) {
-    await openImportedFile(state.importedFiles.length - 1);
+    // Rebuild image list if currently viewing images
+    if (state.fileType === 'img') {
+      buildImageList(null).then(function() {
+        openImportedFile(state.importedFiles.length - 1);
+      });
+    } else {
+      await openImportedFile(state.importedFiles.length - 1);
+    }
     showToast(`已打开 ${_count} 个文件`);
   }
   } catch(err) { console.error('[openBtn] ERROR:', err); showToast('打开失败: ' + (err.message || err)); }
