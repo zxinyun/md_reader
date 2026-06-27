@@ -821,7 +821,18 @@ function escapeHtml(text) {
     return '';
   }
   function parseInline(text) {
-    let t = escapeHtml(text);
+    // Extract math formulas BEFORE escaping, protect them from escapeHtml
+    const mathBlocks = [];
+    let t = text.replace(/\$\$(.+?)\$\$/gs, function(m, formula) {
+      const idx = mathBlocks.length;
+      mathBlocks.push({ tex: formula.trim(), display: true });
+      return '\x00MATH' + idx + '\x00';
+    }).replace(/\$([^$\n]+?)\$/g, function(m, formula) {
+      const idx = mathBlocks.length;
+      mathBlocks.push({ tex: formula.trim(), display: false });
+      return '\x00MATH' + idx + '\x00';
+    });
+    t = escapeHtml(t);
     // Images
     t = t.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (m, alt, src) => {
       const raw = src.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#039;/g, "'");
@@ -846,6 +857,14 @@ function escapeHtml(text) {
     t = inlineCode(t);
     // Hard line breaks within paragraphs (newline → <br>)
     t = t.replace(/\n/g, '<br>');
+    // Restore math blocks
+    t = t.replace(/\x00MATH(\d+)\x00/g, function(m, idx) {
+      var block = mathBlocks[parseInt(idx)];
+      if (!block) return '';
+      var tag = block.display ? 'div' : 'span';
+      var cls = block.display ? 'katex-display' : 'katex-inline';
+      return '<' + tag + ' class="' + cls + '" data-tex="' + block.tex.replace(/"/g, '&quot;') + '">' + block.tex + '</' + tag + '>';
+    });
     return t;
   }
 
@@ -3896,10 +3915,32 @@ function buildMdOutline() {
 
 async function enhanceMdContent() {
   if (state.fileType !== 'md') return;
+  try { await renderMathFromDataTex(); } catch(e) {}
   try { await enhanceDisplayMath(); } catch(e) {}
   try { await enhanceInlineMath(); } catch(e) {}
   try { await enhanceSyntaxHighlighting(); } catch(e) {}
   try { await enhanceMermaid(); } catch(e) {}
+}
+
+// Render KaTeX from data-tex attributes (created by parseInline)
+async function renderMathFromDataTex() {
+  await ensureKaTeX();
+  // Display math
+  mdContent.querySelectorAll('div.katex-display[data-tex]').forEach(function(el) {
+    try {
+      var tex = el.getAttribute('data-tex');
+      el.innerHTML = katex.renderToString(tex, { displayMode: true, throwOnError: false });
+      el.setAttribute('data-tex', tex);
+    } catch(e) {}
+  });
+  // Inline math
+  mdContent.querySelectorAll('span.katex-inline[data-tex]').forEach(function(el) {
+    try {
+      var tex = el.getAttribute('data-tex');
+      el.innerHTML = katex.renderToString(tex, { displayMode: false, throwOnError: false });
+      el.setAttribute('data-tex', tex);
+    } catch(e) {}
+  });
 }
 
 async function enhanceDisplayMath() {
