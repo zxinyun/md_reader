@@ -2006,8 +2006,8 @@ async function renderPdfWithPdfJs(buf) {
       '<button id="pdfZoomOut" title="缩小" style="' + btnStyle + 'font-size:16px;">−</button>',
       '<span id="pdfZoomLevel" style="font-size:12px;color:var(--text-secondary);min-width:36px;text-align:center;flex-shrink:0;">100%</span>',
       '<button id="pdfZoomIn" title="放大" style="' + btnStyle + 'font-size:16px;">+</button>',
-      '<button id="pdfFitWidth" title="适合宽度" style="' + btnStyle + '">宽度</button>',
-      '<button id="pdfFitPage" title="适合页面" style="' + btnStyle + '">页面</button>',
+      '<button id="pdfFitWidth" title="适合宽度 - 页面填满屏幕宽度" style="' + btnStyle + '">适宽</button>',
+      '<button id="pdfFitPage" title="适合页面 - 显示完整页面" style="' + btnStyle + '">适页</button>',
       '<button id="pdfRotate" title="旋转90°" style="' + btnStyle + 'font-size:16px;">🔄</button>',
       '<div style="width:1px;height:20px;background:var(--border);margin:0 2px;flex-shrink:0;"></div>',
       '<button id="pdfToolBtn" title="标注工具" style="' + btnStyle + 'font-size:16px;">✏️</button>',
@@ -2124,6 +2124,11 @@ async function renderPdfWithPdfJs(buf) {
       pagesContainer.style.alignItems = 'center';
       pageCanvases = [];
       var page = await pdf.getPage(currentPage);
+      // Auto-fit: calculate scale to fit container width
+      var containerW = scrollContainer.clientWidth - 24;
+      var rawViewport = page.getViewport({ scale: 1 });
+      var fitScale = containerW / rawViewport.width * (window.devicePixelRatio || 1);
+      if (currentScale === 1 || currentScale === fitScale) currentScale = fitScale;
       var viewport = page.getViewport({ scale: currentScale });
       baseWidth = viewport.width;
       var canvas = document.createElement('canvas');
@@ -2235,6 +2240,21 @@ async function renderPdfWithPdfJs(buf) {
       currentScale = Math.max(currentScale / 1.25, 0.25);
       renderAllPages().then(renderThumbnails);
     });
+    // Register PDF zoom for main toolbar zoom buttons
+    wrapper._pdfZoom = function(delta) {
+      currentScale = Math.min(Math.max(currentScale * (1 + delta), 0.25), 5);
+      renderAllPages().then(renderThumbnails);
+      zoomDisplay.textContent = Math.round(currentScale * 100) + '%';
+    };
+    wrapper._pdfFitWidth = function() {
+      var containerW = scrollContainer.clientWidth - 24;
+      var page = pdf.getPage(currentPage);
+      page.then(function(p) {
+        var vp = p.getViewport({ scale: 1 });
+        currentScale = containerW / vp.width * (window.devicePixelRatio || 1);
+        renderAllPages().then(renderThumbnails);
+      });
+    };
     document.getElementById('pdfFitWidth').addEventListener('click', function() {
       currentScale = scrollContainer.clientWidth / (baseWidth / currentScale) * currentScale / (window.devicePixelRatio || 1);
       renderAllPages().then(renderThumbnails);
@@ -3643,6 +3663,21 @@ function navigateDoc(dir) {
   var newIdx = idx + dir;
   if (newIdx < 0 || newIdx >= state.importedFiles.length) return;
   var f = state.importedFiles[newIdx];
+  // Lazy load: read content if not loaded
+  if ((f.content === null || f.content === undefined) && f._fileRef) {
+    showLoading('正在加载 ' + f.name + '...');
+    var binary = isBinaryType(f.type);
+    readFileBlob(f._fileRef, binary).then(function(content) {
+      f.content = content;
+      hideLoading();
+      navigateDoc(dir);
+    }).catch(function(e) {
+      hideLoading();
+      showToast('读取文件失败: ' + (e.message || e));
+    });
+    return;
+  }
+  if (!f.content && f.content !== '') { showToast('文件内容为空: ' + f.name); return; }
   state._currentImportPath = f.fullPath;
   // Close PDF viewer if open
   var _pw = document.getElementById('pdfViewerWrapper');
@@ -5031,6 +5066,12 @@ contentArea.addEventListener('scroll', updateProgress);
 
 // ===== Zoom =====
 function applyZoom(delta) {
+  // If PDF is open, zoom PDF instead of general content
+  var pdfWrapper = document.getElementById('pdfViewerWrapper');
+  if (pdfWrapper && pdfWrapper._pdfZoom) {
+    pdfWrapper._pdfZoom(delta);
+    return;
+  }
   const old = state.zoomLevel;
   let z = state.zoomLevel + delta;
   z = Math.round(Math.min(4, Math.max(0.25, z)) * 100) / 100;
@@ -6121,6 +6162,7 @@ $('tbStats').addEventListener('click', showStats);
 
 // ===== Fullscreen =====
 $('tbFullscreen').addEventListener('click', () => {
+  var pdfWrapper = document.getElementById('pdfViewerWrapper');
   if (!document.fullscreenElement && !document.webkitFullscreenElement) {
     const el = document.documentElement;
     if (el.requestFullscreen) {
@@ -6129,6 +6171,10 @@ $('tbFullscreen').addEventListener('click', () => {
       el.webkitRequestFullscreen();
     }
     showToast('进入全屏');
+    // Re-fit PDF after fullscreen
+    if (pdfWrapper && pdfWrapper._pdfFitWidth) {
+      setTimeout(function() { pdfWrapper._pdfFitWidth(); }, 300);
+    }
   } else {
     if (document.exitFullscreen) {
       document.exitFullscreen().catch(() => {});
