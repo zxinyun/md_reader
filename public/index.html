@@ -4637,14 +4637,17 @@ async function exportAsImage(mode) {
     showToast(`已导出 ${sections.length} 张分段截图`);
   } else if (mode === 'pdf') {
     // Export as PDF via browser print dialog
+    showToast('正在准备 PDF 导出...');
+    const clone = target.cloneNode(true);
+    // Replace KaTeX with images so formulas render correctly
+    await replaceKatexWithImages(clone);
     const printWin = window.open('', '_blank');
     if (!printWin) { showToast('弹窗被阻止，请允许弹窗后重试'); return; }
     const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]')).map(el => el.outerHTML).join('\n');
-    printWin.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${state.fileName || '导出'}</title>${styles}<style>body{font-family:-apple-system,sans-serif;max-width:800px;margin:0 auto;padding:20px;color:#333;line-height:1.7}img{max-width:100%;height:auto}@media print{body{padding:0}}</style></head><body>${target.innerHTML}</body></html>`);
+    printWin.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${state.fileName || '导出'}</title>${styles}<style>body{font-family:-apple-system,sans-serif;max-width:800px;margin:0 auto;padding:20px;color:#333;line-height:1.7}img{max-width:100%;height:auto}@media print{body{padding:0}}</style></head><body>${clone.innerHTML}</body></html>`);
     printWin.document.close();
     printWin.onload = function() {
       printWin.print();
-      // Don't close — let user save as PDF from print dialog
     };
     showToast('请在打印对话框中选择"另存为 PDF"');
   }
