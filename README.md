@@ -25,7 +25,7 @@
 - **数学公式** — KaTeX 渲染，支持 LaTeX 语法
 - **Mermaid 图表** — 流程图、时序图、甘特图等
 - **PDF 注释** — 高亮、下划线、矩形框、文字批注、便签
-- **加密 Office** — 支持密码保护的 Word/Excel/PPT 解密
+- **加密 Office** — 支持密码保护的 Word/Excel/PPT 输入密码后预览
 - **代码高亮** — 30+ 语言，明暗双主题
 - **文件导出** — Markdown/HTML 导出、Word 导出、PDF 截图
 - **会话恢复** — 自动记住上次打开的文件和滚动位置
@@ -174,7 +174,7 @@ git push origin main --tags
 | 移动端 | ✅ Android/iOS | ❌ | ❌ | ✅ |
 | 免费开源 | ✅ GPL v3 | ❌ 付费 | ✅ MIT | ❌ 付费 |
 | PDF 注释 | ✅ | ❌ | ❌ | ✅ |
-| 加密 Office | ✅ | ❌ | ❌ | ✅ |
+| 加密 Office 预览 | ✅ | ❌ | ❌ | ✅ |
 
 ## 贡献
 
