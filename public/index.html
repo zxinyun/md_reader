@@ -1159,62 +1159,61 @@ async function decodeText(buffer) {
   if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF)
     return { text: new TextDecoder('utf-8').decode(buffer.slice(3)), encoding: 'UTF-8 (BOM)' };
 
+  // Decode candidates and score by U+FFFD (replacement char) and CJK count
+  var ffRe = /\uFFFD/g;
+  var cjkRe = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u2f00-\u2fdf\u3000-\u303f\uff00-\uffef]/g;
+
+  function qual(text) {
+    if (!text) return { ff: Infinity, cjk: -1 };
+    return { ff: (text.match(ffRe) || []).length, cjk: (text.match(cjkRe) || []).length };
+  }
+
   var utf8Text = null;
   try { utf8Text = new TextDecoder('utf-8', { fatal: true }).decode(buffer); } catch (e) {}
 
-  // jschardet detection
-  try {
-    if (typeof jschardet === 'undefined') {
-      await loadScript('https://cdn.jsdelivr.net/npm/jschardet@3.1.3/dist/jschardet.min.js');
-    }
-    const sample = bytes.length > 65536 ? bytes.slice(0, 65536) : bytes;
-    const detected = jschardet.detect(sample);
-    if (detected && detected.encoding) {
-      var enc = detected.encoding.toLowerCase();
-      // If jschardet confirms UTF-8 AND content passed strict validation, trust it
-      if (enc === 'utf-8' && utf8Text !== null)
-        return { text: utf8Text, encoding: 'UTF-8' };
-      const map = { 'gb2312':'GBK', 'gbk':'GBK', 'gb18030':'GB18030', 'big5':'Big5',
-        'euc-kr':'EUC-KR', 'euc-jp':'EUC-JP', 'shift_jis':'Shift-JIS',
-        'iso-2022-jp':'ISO-2022-JP', 'windows-1252':'Windows-1252',
-        'iso-8859-1':'ISO-8859-1', 'koi8-r':'KOI8-R' };
-      if (map[enc]) {
+  // If UTF-8 passes strict, verify against GBK to catch GBK impostors
+  if (utf8Text !== null) {
+    var uq = qual(utf8Text);
+    if (uq.cjk > 0) {
+      // Has CJK characters — cross-check with GBK
+      try {
+        var gbkText = new TextDecoder('gbk').decode(buffer);
+        var gq = qual(gbkText);
+        // GBK with 0 U+FFFD and more CJK chars means UTF-8 was wrong
+        if (gq.ff === 0 && gq.cjk > uq.cjk)
+          return { text: gbkText, encoding: 'GBK' };
         try {
-          const text = new TextDecoder(enc).decode(buffer);
-          return { text: text, encoding: map[enc] };
-        } catch (e2) {}
-      }
+          var big5Text = new TextDecoder('big5').decode(buffer);
+          var bq = qual(big5Text);
+          if (bq.ff === 0 && bq.cjk > uq.cjk && bq.cjk > gq.cjk)
+            return { text: big5Text, encoding: 'Big5' };
+        } catch (e) {}
+      } catch (e) {}
     }
-  } catch (e) {}
+    return { text: utf8Text, encoding: 'UTF-8' };
+  }
 
-  // Heuristic: try GBK and Big5, count CJK characters, pick best
+  // UTF-8 strict failed — decode GBK, Big5 and score them
   var gbkText = null, big5Text = null;
   try { gbkText = new TextDecoder('gbk').decode(buffer); } catch (e) {}
   try { big5Text = new TextDecoder('big5').decode(buffer); } catch (e) {}
-  if (utf8Text !== null || gbkText !== null || big5Text !== null) {
-    var cjkRe = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u2f00-\u2fdf\u3000-\u303f\uff00-\uffef]/g;
-    var scores = [
-      { text: utf8Text, enc: 'UTF-8', score: utf8Text ? (utf8Text.match(cjkRe) || []).length : -1 },
-      { text: gbkText, enc: 'GBK', score: gbkText ? (gbkText.match(cjkRe) || []).length : -1 },
-      { text: big5Text, enc: 'Big5', score: big5Text ? (big5Text.match(cjkRe) || []).length : -1 }
-    ];
-    scores.sort(function(a,b){ return b.score - a.score; });
-    // Pick highest score; if tied, prefer GBK > Big5 > UTF-8 for CJK content
-    if (scores[0].score > 0 || utf8Text !== null) {
-      for (var i = 0; i < scores.length; i++) {
-        if (scores[i].text !== null) {
-          var label = scores[i].enc;
-          if (scores[i].score <= 0 && utf8Text !== null) label = 'UTF-8';
-          return { text: scores[i].text, encoding: label };
-        }
-      }
-    }
+  // Also try UTF-8 non-fatal for comparison
+  try { if (!utf8Text) { utf8Text = new TextDecoder('utf-8', { fatal: false }).decode(buffer); } } catch (e) {}
+
+  var candidates = [
+    { text: gbkText, enc: 'GBK', q: qual(gbkText) },
+    { text: big5Text, enc: 'Big5', q: qual(big5Text) },
+    { text: utf8Text, enc: 'UTF-8', q: qual(utf8Text) }
+  ];
+  candidates.sort(function(a, b) {
+    if (a.q.ff !== b.q.ff) return a.q.ff - b.q.ff;
+    return b.q.cjk - a.q.cjk;
+  });
+  for (var i = 0; i < candidates.length; i++) {
+    if (candidates[i].text !== null)
+      return { text: candidates[i].text, encoding: candidates[i].enc };
   }
 
-  // Ultimate fallback
-  if (utf8Text !== null) return { text: utf8Text, encoding: 'UTF-8' };
-  if (gbkText !== null) return { text: gbkText, encoding: 'GBK (fallback)' };
-  if (big5Text !== null) return { text: big5Text, encoding: 'Big5 (fallback)' };
   return { text: new TextDecoder('utf-8', { fatal: false }).decode(buffer), encoding: 'UTF-8 (fallback)' };
 }
 
