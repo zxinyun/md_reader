@@ -5181,21 +5181,21 @@ function isBinaryType(type) { return BINARY_EXTS.has(type); }
 
 // Read a File/FileAPI descriptor and return content (ArrayBuffer for binary, decoded text for others)
 async function readFileBlob(fileOrDesc, binary) {
-  // If it's a raw File/Blob (from drag-drop), read directly
+  if (binary) {
+    if (fileOrDesc instanceof Blob) return await fileOrDesc.arrayBuffer();
+    return await FileAPI.readAsArrayBuffer(fileOrDesc);
+  }
+  // For text files, always read raw bytes and use our own decoder
+  // (browser Blob.text() defaults to UTF-8 and garbles GBK/Big5 content)
+  var arr;
   if (fileOrDesc instanceof Blob) {
-    if (binary) return await fileOrDesc.arrayBuffer();
-    try { return await fileOrDesc.text(); } catch(e) { return await fileOrDesc.arrayBuffer(); }
+    arr = await fileOrDesc.arrayBuffer();
+  } else {
+    arr = await FileAPI.readAsArrayBuffer(fileOrDesc);
   }
-  // Otherwise it's a file descriptor from FileAPI
-  if (binary) return await FileAPI.readAsArrayBuffer(fileOrDesc);
-  try {
-    return await FileAPI.readAsText(fileOrDesc);
-  } catch(e) {
-    const arr = await FileAPI.readAsArrayBuffer(fileOrDesc);
-    const decoded = await decodeText(arr);
-    state.fileEncoding = decoded.encoding;
-    return decoded.text;
-  }
+  const decoded = await decodeText(arr);
+  state.fileEncoding = decoded.encoding;
+  return decoded.text;
 }
 
 let _dropHideTimer = null;
