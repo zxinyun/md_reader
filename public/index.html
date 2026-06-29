@@ -1151,7 +1151,6 @@ function loadScript(src) {
 // ===== Encoding detection & decoding =====
 async function decodeText(buffer) {
   const bytes = new Uint8Array(buffer);
-  var enc = 'UTF-8';
   // BOM detection
   if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE)
     return { text: new TextDecoder('utf-16le').decode(buffer), encoding: 'UTF-16 LE' };
@@ -1160,36 +1159,62 @@ async function decodeText(buffer) {
   if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF)
     return { text: new TextDecoder('utf-8').decode(buffer.slice(3)), encoding: 'UTF-8 (BOM)' };
 
-  // Try UTF-8 first (strict)
-  try {
-    const text = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
-    return { text: text, encoding: 'UTF-8' };
-  } catch (e) { /* not valid UTF-8, try detection */ }
+  var utf8Text = null;
+  try { utf8Text = new TextDecoder('utf-8', { fatal: true }).decode(buffer); } catch (e) {}
 
+  // jschardet detection
   try {
     if (typeof jschardet === 'undefined') {
       await loadScript('https://cdn.jsdelivr.net/npm/jschardet@3.1.3/dist/jschardet.min.js');
     }
-    // Only use first 64KB for detection (performance)
     const sample = bytes.length > 65536 ? bytes.slice(0, 65536) : bytes;
     const detected = jschardet.detect(sample);
     if (detected && detected.encoding) {
+      var enc = detected.encoding.toLowerCase();
+      // If jschardet confirms UTF-8 AND content passed strict validation, trust it
+      if (enc === 'utf-8' && utf8Text !== null)
+        return { text: utf8Text, encoding: 'UTF-8' };
       const map = { 'gb2312':'GBK', 'gbk':'GBK', 'gb18030':'GB18030', 'big5':'Big5',
         'euc-kr':'EUC-KR', 'euc-jp':'EUC-JP', 'shift_jis':'Shift-JIS',
         'iso-2022-jp':'ISO-2022-JP', 'windows-1252':'Windows-1252',
-        'iso-8859-1':'ISO-8859-1', 'koi8-r':'KOI8-R',
-        'ascii':'ASCII', 'utf-8':'UTF-8' };
-      const finalEnc = map[detected.encoding.toLowerCase()] || detected.encoding;
-      try {
-        const text = new TextDecoder(detected.encoding.toLowerCase()).decode(buffer);
-        return { text: text, encoding: finalEnc };
-      } catch (e2) { /* fallback */ }
+        'iso-8859-1':'ISO-8859-1', 'koi8-r':'KOI8-R' };
+      if (map[enc]) {
+        try {
+          const text = new TextDecoder(enc).decode(buffer);
+          return { text: text, encoding: map[enc] };
+        } catch (e2) {}
+      }
     }
-  } catch (e) { /* detection failed */ }
+  } catch (e) {}
 
-  // Final fallback: try common CJK encodings
-  try { const t = new TextDecoder('gbk').decode(buffer); return { text: t, encoding: 'GBK' }; } catch (e) {}
-  try { const t = new TextDecoder('big5').decode(buffer); return { text: t, encoding: 'Big5' }; } catch (e) {}
+  // Heuristic: try GBK and Big5, count CJK characters, pick best
+  var gbkText = null, big5Text = null;
+  try { gbkText = new TextDecoder('gbk').decode(buffer); } catch (e) {}
+  try { big5Text = new TextDecoder('big5').decode(buffer); } catch (e) {}
+  if (utf8Text !== null || gbkText !== null || big5Text !== null) {
+    var cjkRe = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u2f00-\u2fdf\u3000-\u303f\uff00-\uffef]/g;
+    var scores = [
+      { text: utf8Text, enc: 'UTF-8', score: utf8Text ? (utf8Text.match(cjkRe) || []).length : -1 },
+      { text: gbkText, enc: 'GBK', score: gbkText ? (gbkText.match(cjkRe) || []).length : -1 },
+      { text: big5Text, enc: 'Big5', score: big5Text ? (big5Text.match(cjkRe) || []).length : -1 }
+    ];
+    scores.sort(function(a,b){ return b.score - a.score; });
+    // Pick highest score; if tied, prefer GBK > Big5 > UTF-8 for CJK content
+    if (scores[0].score > 0 || utf8Text !== null) {
+      for (var i = 0; i < scores.length; i++) {
+        if (scores[i].text !== null) {
+          var label = scores[i].enc;
+          if (scores[i].score <= 0 && utf8Text !== null) label = 'UTF-8';
+          return { text: scores[i].text, encoding: label };
+        }
+      }
+    }
+  }
+
+  // Ultimate fallback
+  if (utf8Text !== null) return { text: utf8Text, encoding: 'UTF-8' };
+  if (gbkText !== null) return { text: gbkText, encoding: 'GBK (fallback)' };
+  if (big5Text !== null) return { text: big5Text, encoding: 'Big5 (fallback)' };
   return { text: new TextDecoder('utf-8', { fatal: false }).decode(buffer), encoding: 'UTF-8 (fallback)' };
 }
 
