@@ -365,7 +365,7 @@ body {
 .docx-preview-wrap canvas { max-width: 100%; height: auto; }
 .docx-preview-wrap svg { max-width: 100%; height: auto; }
 .docx-preview-wrap .docx-wrapper { background: transparent !important; padding: 0 !important; width: 100% !important; }
-.docx-preview-wrap .docx-wrapper > section { padding: 48px 56px !important; background: var(--bg-card); border-radius: var(--radius-sm); box-shadow: var(--shadow); max-width: 100% !important; margin: 12px auto !important; box-sizing: border-box !important; overflow-wrap: break-word; }
+.docx-preview-wrap .docx-wrapper > section { padding: 48px 56px !important; background: var(--bg-card); border-radius: var(--radius-sm); box-shadow: var(--shadow); max-width: 100% !important; margin: 12px auto !important; box-sizing: border-box !important; overflow-wrap: break-word; position: relative !important; overflow: hidden !important; }
 /* Black block workaround: EMF/WMF placeholder shapes */
 .docx-preview-wrap img[src^="data:image/x-emf"], .docx-preview-wrap img[src^="data:image/x-wmf"] { opacity: 0.4; border: 1px dashed var(--border); }
 .docx-preview-wrap canvas[width="1"][height="1"], .docx-preview-wrap img[width="1"][height="1"] { display: none !important; }
@@ -1591,6 +1591,7 @@ function clearDocument() {
   var _ucb = document.getElementById('urlCloseBtn');
   if (_ucb) _ucb.remove();
   // Keep file in DB for session restore on next page load — only clear UI
+  if (_pdfBlobUrl) { URL.revokeObjectURL(_pdfBlobUrl); _pdfBlobUrl = null; }
   if (state.fileType === 'html' || state.fileType === 'pdf') {
     if (htmlFrame.src && htmlFrame.src.startsWith('blob:')) URL.revokeObjectURL(htmlFrame.src);
     var pdfWrapper = document.getElementById('pdfViewerWrapper');
@@ -2006,21 +2007,25 @@ async function renderContent() {
   updateEditBtn();
 }
 
+var _pdfBlobUrl = null;
+
 function renderPdf(buf) {
   showLoading('正在加载 PDF...');
-  showContent();
   // Desktop: use iframe (browser built-in PDF viewer)
   if (typeof FileAPI === 'undefined' || FileAPI.platform !== 'capacitor') {
+    if (_pdfBlobUrl) { URL.revokeObjectURL(_pdfBlobUrl); _pdfBlobUrl = null; }
     const blob = new Blob([buf], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
+    _pdfBlobUrl = url;
     htmlFrame.style.display = 'block';
     htmlFrame.className = 'pdf-container';
     htmlFrame.src = url;
-    htmlFrame.onload = () => { URL.revokeObjectURL(url); hideLoading(); };
-    htmlFrame.onerror = hideLoading;
+    htmlFrame.onload = () => { showContent(); hideLoading(); };
+    htmlFrame.onerror = () => { hideLoading(); showToast('PDF 加载失败'); };
     return;
   }
   // Mobile (Capacitor/Android): use pdf.js
+  showContent();
   renderPdfWithPdfJs(buf);
 }
 
@@ -2670,6 +2675,16 @@ async function browseUrl(prefill) {
   htmlFrame.className = 'html-frame';
   htmlFrame._searchDoc = null;
 
+  function openInExternalBrowser(url) {
+    if (typeof FileAPI !== 'undefined' && FileAPI.platform === 'tauri') {
+      if (window.__TAURI__ && window.__TAURI__.shell && window.__TAURI__.shell.open) {
+        window.__TAURI__.shell.open(url);
+        return;
+      }
+    }
+    window.open(url, '_blank');
+  }
+
   function showXfoError(msg) {
     hideLoading();
     htmlFrame.style.display = 'none';
@@ -2681,19 +2696,19 @@ async function browseUrl(prefill) {
     div.style.cssText = 'min-height:auto;padding:40px 0';
     div.innerHTML = `<div class="icon" style="font-size:48px">🌐</div>
       <h2>无法加载此网页</h2>
-      <p style="max-width:300px;line-height:1.6;font-size:13px">${escapeHtml(msg || '该网站禁止在框架中显示或拒绝连接')}<br>请尝试 <a href="${escapeHtml(finalUrl)}" target="_blank" style="color:var(--primary)">在新标签页中打开</a></p>`;
+      <p style="max-width:300px;line-height:1.6;font-size:13px">${escapeHtml(msg || '该网站禁止在框架中显示或拒绝连接')}</p>
+      <button onclick="openInExternalBrowser('${escapeHtml(finalUrl)}')" style="margin-top:12px;padding:8px 20px;border:none;border-radius:8px;background:var(--primary);color:#fff;font-size:14px;cursor:pointer">🌐 使用浏览器打开</button>
+      <br><a href="${escapeHtml(finalUrl)}" target="_blank" style="display:inline-block;margin-top:8px;color:var(--primary);font-size:13px">在新标签页中打开 →</a>`;
     mdContent.appendChild(div);
   }
 
-  // Pre-check connectivity with fetch (catches connection-refused immediately)
+  // Pre-check connectivity (non-blocking: catch errors silently, let iframe try)
   try {
     const ctrl = new AbortController();
-    const tid = setTimeout(() => ctrl.abort(), 5000);
+    setTimeout(() => ctrl.abort(), 5000);
     await fetch(finalUrl, { method: 'HEAD', mode: 'no-cors', signal: ctrl.signal });
-    clearTimeout(tid);
   } catch(_) {
-    showXfoError('服务器拒绝连接，请检查网址或网络');
-    return;
+    /* network pre-check failed — still try iframe */
   }
 
   // Shared check for browser error pages (Chinese + English)
@@ -2776,7 +2791,7 @@ async function browseUrl(prefill) {
     hideLoading();
   }, 15000);
 
-  htmlFrame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms');
+  htmlFrame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups');
   htmlFrame.src = finalUrl;
   showActionStrip(true);
 
@@ -2927,6 +2942,8 @@ async function renderDocx(arrayBuffer) {
       sec.style.margin = '12px auto';
       sec.style.maxWidth = '100%';
       sec.style.boxSizing = 'border-box';
+      sec.style.position = 'relative';
+      sec.style.overflow = 'hidden';
     });
     _d('[DOCX] forced padding on ' + wrap.querySelectorAll('section').length + ' sections');
 
