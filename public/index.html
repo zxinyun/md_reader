@@ -2011,8 +2011,8 @@ var _pdfBlobUrl = null;
 
 function renderPdf(buf) {
   showLoading('正在加载 PDF...');
-  // Desktop: use iframe (browser built-in PDF viewer)
-  if (typeof FileAPI === 'undefined' || FileAPI.platform !== 'capacitor') {
+  // Web: use iframe (browser built-in PDF viewer)
+  if (typeof FileAPI !== 'undefined' && FileAPI.platform === 'web') {
     if (_pdfBlobUrl) { URL.revokeObjectURL(_pdfBlobUrl); _pdfBlobUrl = null; }
     const blob = new Blob([buf], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
