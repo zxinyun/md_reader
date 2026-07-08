@@ -182,4 +182,6 @@ git push origin main --tags
 
 ## 许可证
 
+本项目积极参与并认可 [LINUX DO](https://linux.do) 社区。
+
 本项目基于 [GNU General Public License v3.0](LICENSE) 开源。
