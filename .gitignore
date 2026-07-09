@@ -28,5 +28,12 @@ ios/App/Pods/
 desktop.ini
 ._*
 
+# Local build scripts (may contain machine-specific paths)
+build.ps1
+build.sh
+
+# Debug/temp artifacts
+*_lock_entry.txt
+
 # Backup
 _backup/
