@@ -50,6 +50,56 @@
       "wix": {
         "language": "zh-CN"
       }
-    }
+    },
+    "fileAssociations": [
+      {
+        "name": "Markdown",
+        "ext": ["md", "mdx"],
+        "description": "Markdown File",
+        "role": "Editor"
+      },
+      {
+        "name": "Text",
+        "ext": ["txt", "log", "csv", "json", "xml", "yaml", "yml", "toml", "ini", "cfg", "conf", "env"],
+        "description": "Text File",
+        "role": "Editor"
+      },
+      {
+        "name": "Code",
+        "ext": ["js", "ts", "jsx", "tsx", "mjs", "cjs", "vue", "svelte", "astro", "py", "rb", "php", "sh", "bash", "zsh", "css", "scss", "less", "sass", "styl", "java", "c", "cpp", "h", "hpp", "go", "rs", "swift", "kt", "dart", "lua", "r", "pl", "sql", "tex", "rst", "bat", "cmd", "ps1", "gradle", "dockerfile", "gitignore", "editorconfig", "htaccess", "makefile", "cmake"],
+        "description": "Code File",
+        "role": "Editor"
+      },
+      {
+        "name": "HTML",
+        "ext": ["html", "htm"],
+        "description": "HTML File",
+        "role": "Viewer"
+      },
+      {
+        "name": "PDF",
+        "ext": ["pdf"],
+        "description": "PDF Document",
+        "role": "Viewer"
+      },
+      {
+        "name": "Word",
+        "ext": ["doc", "docx", "wps", "wpt"],
+        "description": "Word Document",
+        "role": "Editor"
+      },
+      {
+        "name": "Excel",
+        "ext": ["xls", "xlsx", "et", "ett"],
+        "description": "Excel Spreadsheet",
+        "role": "Editor"
+      },
+      {
+        "name": "PowerPoint",
+        "ext": ["ppt", "pptx", "dps", "dpt"],
+        "description": "PowerPoint Presentation",
+        "role": "Viewer"
+      }
+    ]
   }
 }
