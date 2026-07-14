@@ -202,6 +202,11 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Install required SDK platforms
+        run: |
+          sdkmanager --install "platforms;android-36" "build-tools;36.0.0" --sdk_root=$ANDROID_HOME 2>/dev/null || true
+          sdkmanager --install "platforms;android-35" "build-tools;35.0.0" --sdk_root=$ANDROID_HOME 2>/dev/null || true
+
       - name: Install npm deps
         run: npm ci
 
