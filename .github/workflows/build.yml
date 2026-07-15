@@ -103,17 +103,14 @@ jobs:
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-      - name: Install Linux ARM64 cross-compile deps
+      - name: Install Linux ARM64 native deps
         if: matrix.platform == 'ubuntu-24.04-arm'
         run: |
-          sudo dpkg --add-architecture arm64
           sudo apt-get update
           sudo apt-get install -y \
-            gcc-aarch64-linux-gnu \
-            g++-aarch64-linux-gnu \
-            libwebkit2gtk-4.1-dev:arm64 \
-            libappindicator3-dev:arm64 \
-            librsvg2-dev:arm64 \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
             patchelf
 
       - name: Install Linux x64 system deps
@@ -204,8 +201,12 @@ jobs:
 
       - name: Install required SDK platforms
         run: |
-          sdkmanager --install "platforms;android-36" "build-tools;36.0.0" --sdk_root=$ANDROID_HOME 2>/dev/null || true
-          sdkmanager --install "platforms;android-35" "build-tools;35.0.0" --sdk_root=$ANDROID_HOME 2>/dev/null || true
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          yes | sdkmanager --licenses --sdk_root=$ANDROID_HOME || true
+          sdkmanager --install "platforms;android-36" "build-tools;36.0.0" --sdk_root=$ANDROID_HOME || true
+          sdkmanager --install "platforms;android-35" "build-tools;35.0.0" --sdk_root=$ANDROID_HOME || true
+          ls -la $ANDROID_HOME/platforms/ $ANDROID_HOME/build-tools/ || true
 
       - name: Install npm deps
         run: npm ci
@@ -224,13 +225,21 @@ jobs:
           fi
 
       - name: Sync Android
-        run: npx cap sync android
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+          npx cap sync android
 
       - name: Build Android APK
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.parallel=false"
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          echo "ANDROID_HOME=${ANDROID_HOME}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}"
+          ls -la $ANDROID_HOME/platforms/ || true
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1
 
       - name: Rename APK
         run: |
