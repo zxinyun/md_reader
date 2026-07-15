@@ -109,7 +109,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
-            libayatana-appindicator3-dev \
             librsvg2-dev \
             patchelf
 
@@ -203,9 +202,11 @@ jobs:
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME"
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          yes | sdkmanager --licenses --sdk_root=$ANDROID_HOME || true
-          sdkmanager --install "platforms;android-35" "build-tools;35.0.0" --sdk_root=$ANDROID_HOME || true
-          ls -la $ANDROID_HOME/platforms/ $ANDROID_HOME/build-tools/ || true
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses --sdk_root=$ANDROID_HOME || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0" --sdk_root=$ANDROID_HOME
+          echo "=== SDK contents ==="
+          ls -la $ANDROID_HOME/platforms/ 2>/dev/null || echo "No platforms dir"
+          ls -la $ANDROID_HOME/build-tools/ 2>/dev/null || echo "No build-tools dir"
 
       - name: Install npm deps
         run: npm ci
@@ -223,6 +224,12 @@ jobs:
             keytool -genkeypair -v -keystore $HOME/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
 
+      - name: Check Gradle wrapper
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew --version --no-daemon 2>&1 || echo "Gradle check failed but continuing"
+
       - name: Sync Android
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
@@ -237,8 +244,10 @@ jobs:
           chmod +x gradlew
           echo "ANDROID_HOME=${ANDROID_HOME}"
           echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}"
-          ls -la $ANDROID_HOME/platforms/ || true
-          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1
+          echo "JAVA_HOME=${JAVA_HOME}"
+          ls -la $ANDROID_HOME/platforms/ 2>/dev/null || echo "No platforms dir"
+          ls -la $ANDROID_HOME/build-tools/ 2>/dev/null || echo "No build-tools dir"
+          ./gradlew assembleDebug --no-daemon --stacktrace --info 2>&1
 
       - name: Rename APK
         run: |
