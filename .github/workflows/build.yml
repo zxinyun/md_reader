@@ -83,7 +83,7 @@ jobs:
             fs.writeFileSync("src-tauri/Cargo.toml", cargo);
             var cap = JSON.parse(fs.readFileSync("capacitor.config.json","utf8"));
             cap.versionName = V;
-            var p = V.split(".").map(Number);
+            var p = V.replace(/-.*$/, "").split(".").map(Number);
             cap.versionCode = (p[0]||0)*10000 + (p[1]||0)*100 + (p[2]||0);
             fs.writeFileSync("capacitor.config.json", JSON.stringify(cap, null, 2) + "\n");
             var g = fs.readFileSync("android/app/build.gradle","utf8");
@@ -175,7 +175,7 @@ jobs:
             fs.writeFileSync("src-tauri/Cargo.toml", cargo);
             var cap = JSON.parse(fs.readFileSync("capacitor.config.json","utf8"));
             cap.versionName = V;
-            var p = V.split(".").map(Number);
+            var p = V.replace(/-.*$/, "").split(".").map(Number);
             cap.versionCode = (p[0]||0)*10000 + (p[1]||0)*100 + (p[2]||0);
             fs.writeFileSync("capacitor.config.json", JSON.stringify(cap, null, 2) + "\n");
             var g = fs.readFileSync("android/app/build.gradle","utf8");
@@ -283,7 +283,7 @@ jobs:
             fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
             var cap = JSON.parse(fs.readFileSync("capacitor.config.json","utf8"));
             cap.versionName = V;
-            var p = V.split(".").map(Number);
+            var p = V.replace(/-.*$/, "").split(".").map(Number);
             cap.versionCode = (p[0]||0)*10000 + (p[1]||0)*100 + (p[2]||0);
             fs.writeFileSync("capacitor.config.json", JSON.stringify(cap, null, 2) + "\n");
           ' "$VERSION"
