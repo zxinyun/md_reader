@@ -223,6 +223,8 @@ $('actClear').addEventListener('click', () => clearDocument());
 // Document navigation
 $('actPrev').addEventListener('click', () => navigateDoc(-1));
 $('actNext').addEventListener('click', () => navigateDoc(1));
+// AI Summary
+$('actAiSummary').addEventListener('click', () => showAiSummarySheet());
 
 // ===== Bottom Sheet =====
 function openSheet(html) {
@@ -316,10 +318,242 @@ function showFontSheet() {
   });
 }
 
+// ===== Sheet: AI Settings =====
+function showAiSheet() {
+  const providers = AI_PROVIDERS.map(p => ({ id: p, label: AI_PROVIDER_LABELS[p] || p }));
+  const isCustom = aiConfig.provider === 'custom';
+  const def = AI_PROVIDER_DEFAULTS[aiConfig.provider];
+  const html = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">AI 配置</div>
+    <div class="sheet-group">
+      <div class="sheet-label">API 类型</div>
+      <div class="theme-options">
+        ${providers.map(p => `<button class="theme-opt${aiConfig.provider === p.id ? ' selected' : ''}" data-provider="${p.id}">${p.label}</button>`).join('')}
+      </div>
+    </div>
+    <div class="sheet-group" id="aiCustomNameGroup" style="margin-top:12px;display:${isCustom ? 'block' : 'none'}">
+      <div class="sheet-label">自定义名称</div>
+      <input class="ai-input" id="aiProviderLabel" value="${escapeAttr(aiConfig.providerLabel || '')}" placeholder="例如: DeepSeek / 硅基流动 / 本地 vLLM" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text);box-sizing:border-box">
+    </div>
+    <div class="sheet-group" style="margin-top:12px">
+      <div class="sheet-label">API 地址</div>
+      <input class="ai-input" id="aiBaseUrl" value="${escapeAttr(aiConfig.baseUrl || def?.baseUrl || '')}" placeholder="${isCustom ? 'https://api.example.com/v1' : '例如 ' + (def?.baseUrl || 'https://api.openai.com/v1')}" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text);box-sizing:border-box">
+    </div>
+    <div class="sheet-group" style="margin-top:8px">
+      <div class="sheet-label">API Key</div>
+      <input class="ai-input" id="aiApiKey" type="password" value="${escapeAttr(aiConfig.apiKey)}" placeholder="sk-..." style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text);box-sizing:border-box">
+    </div>
+    <div class="sheet-group" style="margin-top:8px">
+      <div class="sheet-label">模型名称</div>
+      <input class="ai-input" id="aiModel" value="${escapeAttr(aiConfig.model || def?.model || '')}" placeholder="连接后自动获取列表" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text);box-sizing:border-box">
+      <div id="aiModelList" style="margin-top:6px;max-height:180px;overflow-y:auto;display:none;border:1px solid var(--border);border-radius:6px"></div>
+    </div>
+    <div class="sheet-group" style="margin-top:8px">
+      <div class="sheet-label">温度 (0-2, 默认 0.3)</div>
+      <input class="ai-input" id="aiTemp" type="number" min="0" max="2" step="0.1" value="${aiConfig.temperature ?? 0.3}" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text);box-sizing:border-box">
+    </div>
+    <div class="sheet-group" style="margin-top:8px">
+      <div class="sheet-label">最大 Token 数</div>
+      <input class="ai-input" id="aiMaxTokens" type="number" min="256" max="128000" step="256" value="${aiConfig.maxTokens || 4096}" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text);box-sizing:border-box">
+    </div>
+    <div class="sheet-group" style="margin-top:12px;display:flex;gap:8px">
+      <button id="aiTestBtn" style="flex:1;padding:10px;border:none;border-radius:6px;background:var(--accent);color:#fff;cursor:pointer;font-size:14px;font-weight:600">测试连接</button>
+      <button id="aiSaveBtn" style="flex:1;padding:10px;border:none;border-radius:6px;background:var(--primary-light);color:var(--primary);cursor:pointer;font-size:14px;font-weight:600">保存配置</button>
+    </div>
+    <div id="aiStatus" style="margin-top:8px;font-size:12px;color:var(--text-secondary);text-align:center"></div>
+  `;
+  openSheet(html);
+  // Provider selector
+  sheet.querySelectorAll('.theme-opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+      sheet.querySelectorAll('.theme-opt').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      const p = btn.dataset.provider;
+      const isCustom = p === 'custom';
+      // Show/hide custom name field
+      const nameGroup = document.getElementById('aiCustomNameGroup');
+      if (nameGroup) nameGroup.style.display = isCustom ? 'block' : 'none';
+      // Update placeholders
+      const baseUrlInput = document.getElementById('aiBaseUrl');
+      const modelInput = document.getElementById('aiModel');
+      if (baseUrlInput) baseUrlInput.placeholder = isCustom ? 'https://api.example.com/v1' : '例如 ' + (AI_PROVIDER_DEFAULTS[p]?.baseUrl || 'https://api.openai.com/v1');
+      if (modelInput) modelInput.placeholder = isCustom ? '例如: deepseek-chat / Qwen/Qwen2.5-7B' : '例如 ' + (AI_PROVIDER_DEFAULTS[p]?.model || 'gpt-4o-mini');
+      // Fill defaults only if user hasn't edited
+      const d = AI_PROVIDER_DEFAULTS[p];
+      if (d) {
+        if (baseUrlInput && !baseUrlInput.dataset.userEdited) { baseUrlInput.value = d.baseUrl; }
+        if (modelInput && !modelInput.dataset.userEdited) { modelInput.value = d.model; }
+      }
+    });
+  });
+  // Mark inputs as user-edited
+  document.querySelectorAll('.ai-input').forEach(inp => {
+    inp.addEventListener('input', function() { this.dataset.userEdited = '1'; });
+  });
+  // Auto-fetch model list when API URL or Key loses focus
+  function autoFetchModels() {
+    const listEl = document.getElementById('aiModelList');
+    const modelInput = document.getElementById('aiModel');
+    const cfg = collectAiConfig();
+    if (!cfg.baseUrl) return;
+    listEl.style.display = 'block';
+    listEl.innerHTML = '<div style="padding:10px;text-align:center;font-size:12px;color:var(--text-secondary)">⏳ 获取模型列表...</div>';
+    fetchModels(cfg).then(function(models) {
+      if (!models || models.length === 0) { listEl.innerHTML = '<div style="padding:10px;text-align:center;font-size:12px;color:var(--text-secondary)">暂无可用模型，请手动输入</div>'; return; }
+      var currentModel = modelInput.value;
+      listEl.innerHTML = '<div style="padding:4px 8px;font-size:11px;color:var(--text-secondary);border-bottom:1px solid var(--border)">选择模型 (共 ' + models.length + ' 个)</div>' +
+        models.map(function(m) {
+          var sel = m === currentModel ? ' background:var(--primary-light);font-weight:600' : '';
+          return '<div class="ai-model-item" data-model="' + escapeAttr(m) + '" style="padding:7px 10px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s' + sel + '">' + escapeHtml(m) + '</div>';
+        }).join('');
+      listEl.querySelectorAll('.ai-model-item').forEach(function(item) {
+        item.addEventListener('click', function() {
+          modelInput.value = this.dataset.model;
+          modelInput.dataset.userEdited = '1';
+          modelInput.focus();
+          listEl.style.display = 'none';
+        });
+        item.addEventListener('mouseenter', function() { this.style.background = 'var(--hover-bg, var(--primary-light))'; });
+        item.addEventListener('mouseleave', function() { this.style.background = ''; });
+      });
+    }).catch(function(e) {
+      listEl.innerHTML = '<div style="padding:10px;text-align:center;font-size:12px;color:var(--text-secondary)">⚠️ 未能自动获取 (' + escapeHtml(e.message || e) + ')<br>请在输入框中手动填写模型名称</div>';
+    });
+  }
+  var debounceTimer = null;
+  function debounceFetch() {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(autoFetchModels, 400);
+  }
+  document.getElementById('aiBaseUrl').addEventListener('blur', function() {
+    if (this.value.trim()) debounceFetch();
+  });
+  document.getElementById('aiApiKey').addEventListener('blur', function() {
+    if (document.getElementById('aiBaseUrl').value.trim() && this.value.trim()) debounceFetch();
+  });
+  // If already configured, auto-fetch on open
+  if (aiConfig.baseUrl && aiConfig.apiKey) {
+    setTimeout(autoFetchModels, 500);
+  }
+  // Test connection
+  document.getElementById('aiTestBtn').addEventListener('click', async () => {
+    const statusEl = document.getElementById('aiStatus');
+    statusEl.textContent = '测试中...';
+    statusEl.style.color = 'var(--text-secondary)';
+    const testCfg = collectAiConfig();
+    try {
+      const result = await testConnection(testCfg);
+      statusEl.textContent = '✅ 连接成功 (' + result.latency + 'ms): ' + (result.response || '').slice(0, 50);
+      statusEl.style.color = '#27ae60';
+    } catch(e) {
+      statusEl.textContent = '❌ 连接失败: ' + (e.message || e);
+      statusEl.style.color = '#e74c3c';
+    }
+  });
+  // Save config
+  document.getElementById('aiSaveBtn').addEventListener('click', () => {
+    const newCfg = collectAiConfig();
+    Object.assign(aiConfig, newCfg);
+    saveAiConfig();
+    showToast('AI 配置已保存');
+    closeSheet();
+  });
+}
+
+function collectAiConfig() {
+  const selectedProvider = sheet.querySelector('.theme-opt.selected');
+  const provider = selectedProvider ? selectedProvider.dataset.provider : aiConfig.provider;
+  return {
+    provider: provider,
+    providerLabel: document.getElementById('aiProviderLabel')?.value || '',
+    apiKey: document.getElementById('aiApiKey')?.value || '',
+    baseUrl: document.getElementById('aiBaseUrl')?.value || '',
+    model: document.getElementById('aiModel')?.value || '',
+    temperature: parseFloat(document.getElementById('aiTemp')?.value) || 0.3,
+    maxTokens: parseInt(document.getElementById('aiMaxTokens')?.value) || 4096
+  };
+}
+
+// ===== AI Summary Sheet =====
+function showAiSummarySheet() {
+  const modes = [
+    { id: 'tlDr', label: '简要概括' },
+    { id: 'detailed', label: '详细总结' },
+    { id: 'keyPoints', label: '关键要点' },
+    { id: 'structured', label: '结构化分析' }
+  ];
+  const html = `
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">🤖 AI 总结</div>
+    <div class="sheet-group">
+      <div class="sheet-label">总结模式</div>
+      <div class="theme-options">
+        ${modes.map(m => `<button class="theme-opt${m.id === 'tlDr' ? ' selected' : ''}" data-mode="${m.id}">${m.label}</button>`).join('')}
+      </div>
+    </div>
+    <div class="sheet-group" style="margin-top:12px">
+      <div class="sheet-label">正在使用: ${aiConfig.provider === 'custom' && aiConfig.providerLabel ? aiConfig.providerLabel : AI_PROVIDER_LABELS[aiConfig.provider] || aiConfig.provider} / ${aiConfig.model || AI_PROVIDER_DEFAULTS[aiConfig.provider]?.model || '未配置'}</div>
+    </div>
+    <div class="sheet-group" style="margin-top:12px;display:flex;gap:8px">
+      <button id="aiSummaryGo" style="flex:1;padding:10px;border:none;border-radius:6px;background:var(--accent);color:#fff;cursor:pointer;font-size:14px;font-weight:600">开始总结</button>
+      <button id="aiSummaryClose" style="flex:1;padding:10px;border:none;border-radius:6px;background:var(--bg-secondary);color:var(--text-secondary);cursor:pointer;font-size:14px">取消</button>
+    </div>
+    <div id="aiSummaryResult" style="margin-top:12px;padding:12px;background:var(--bg);border-radius:var(--radius-sm);font-size:14px;line-height:1.6;white-space:pre-wrap;max-height:50vh;overflow-y:auto;display:none"></div>
+    <div id="aiSummaryStatus" style="margin-top:8px;font-size:12px;color:var(--text-secondary);text-align:center"></div>
+  `;
+  openSheet(html);
+  // Mode selector
+  sheet.querySelectorAll('.theme-opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+      sheet.querySelectorAll('.theme-opt').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+    });
+  });
+  // Close
+  document.getElementById('aiSummaryClose').addEventListener('click', closeSheet);
+  // Run
+  document.getElementById('aiSummaryGo').addEventListener('click', async () => {
+    const resultEl = document.getElementById('aiSummaryResult');
+    const statusEl = document.getElementById('aiSummaryStatus');
+    const mode = sheet.querySelector('.theme-opt.selected')?.dataset?.mode || 'tlDr';
+    // Get content
+    let text = '';
+    if (state.fileType === 'xlsx') {
+      text = document.querySelector('.csv-table-wrap')?.textContent || document.querySelector('.g-sheet')?.textContent || '';
+    } else {
+      const body = document.getElementById('readerBody') || document.querySelector('.md-body') || htmlFrame;
+      if (body) {
+        if (body.contentWindow) {
+          try { text = body.contentWindow.document.body.innerText || ''; } catch(e) { text = body.contentDocument?.body?.innerText || ''; }
+        } else {
+          text = body.innerText || '';
+        }
+      }
+    }
+    text = text.trim().slice(0, 8000); // Limit length
+    if (!text) { statusEl.textContent = '⚠️ 没有可总结的内容'; statusEl.style.color = '#e67e22'; return; }
+    statusEl.textContent = '⏳ AI 思考中...';
+    statusEl.style.color = 'var(--text-secondary)';
+    resultEl.style.display = 'none';
+    try {
+      const summary = await summarizeText(text, mode);
+      resultEl.textContent = summary;
+      resultEl.style.display = 'block';
+      statusEl.textContent = '✅ 总结完成';
+      statusEl.style.color = '#27ae60';
+    } catch(e) {
+      statusEl.textContent = '❌ ' + (e.message || e);
+      statusEl.style.color = '#e74c3c';
+    }
+  });
+}
+
 // ===== Toolbar actions =====
 $('tbTheme').addEventListener('click', showThemeSheet);
 $('tbFont').addEventListener('click', showFontSheet);
 $('tbStats').addEventListener('click', () => showStats());
+$('tbAi').addEventListener('click', showAiSheet);
 
 // ===== Fullscreen =====
 function _pdfFullscreenNav(dir) {

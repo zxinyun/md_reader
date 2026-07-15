@@ -672,6 +672,8 @@ body.auto .search-active { background: #ff6b35; color: #fff; }
     <button class="action-btn" id="actNext" title="下一个文件" style="display:none">▶</button>
     <span style="width:1px;height:20px;background:var(--border);margin:0 4px"></span>
     <button class="action-btn" id="actClear" title="清空文档" style="color:#e74c3c">🗑️</button>
+    <span style="width:1px;height:20px;background:var(--border);margin:0 4px"></span>
+    <button class="action-btn" id="actAiSummary" title="AI 总结">🤖</button>
   </div>
   <div class="search-bar" id="searchBar" style="display:none">
     <input type="text" id="searchInput" placeholder="搜索关键词..." autocomplete="off">
@@ -777,6 +779,9 @@ body.auto .search-active { background: #ff6b35; color: #fff; }
   <button class="toolbar-btn" id="tbStats" data-action="stats">
     <span class="icon">📊</span><span>统计</span>
   </button>
+  <button class="toolbar-btn" id="tbAi" data-action="ai">
+    <span class="icon">🤖</span><span>AI</span>
+  </button>
   <button class="toolbar-btn" id="tbScrollUp" data-action="scroll-up">
     <span class="icon">↑</span><span>顶部</span>
   </button>
@@ -797,6 +802,7 @@ body.auto .search-active { background: #ff6b35; color: #fff; }
 
 <script src="file-api.js"></script>
     <script src="app/state.js"></script>
+    <script src="app/ai.js"></script>
     <script src="app/md-parser.js"></script>
     <script src="app/encoding.js"></script>
     <script src="app/db.js"></script>

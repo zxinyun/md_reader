@@ -34,6 +34,9 @@ build.sh
 
 # Debug/temp artifacts
 *_lock_entry.txt
+build_*.json
+check_runs.json
+android_build_log.txt
 
 # Backup
 _backup/

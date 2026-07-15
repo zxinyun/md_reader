@@ -1,8 +1,57 @@
 
 const __BUILD_ID__ = '20260619-0500';
 const __APP_VERSION__ = '__APP_VERSION__';
-const __VERSION__ = '1.0.9';
-const __FEATURES__ = { multiFile: true, imageSupport: true, debugPanel: true };
+const __VERSION__ = '1.1.0-beta';
+const __FEATURES__ = { multiFile: true, imageSupport: true, debugPanel: true, ai: true };
+
+// ===== AI Configuration =====
+const AI_PROVIDERS = ['openai', 'gemini', 'ollama', 'openrouter', 'custom'];
+
+const AI_PROVIDER_LABELS = {
+  openai: 'OpenAI',
+  gemini: 'Google Gemini',
+  ollama: 'Ollama (本地)',
+  openrouter: 'OpenRouter',
+  custom: '自定义'
+};
+
+let aiConfig = {
+  provider: 'openai',
+  providerLabel: '',
+  apiKey: '',
+  baseUrl: '',
+  model: '',
+  temperature: 0.3,
+  maxTokens: 4096
+};
+
+// Provider defaults
+const AI_PROVIDER_DEFAULTS = {
+  openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
+  gemini: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-2.0-flash' },
+  ollama: { baseUrl: 'http://localhost:11434', model: 'llama3.2:3b' },
+  openrouter: { baseUrl: 'https://openrouter.ai/api/v1', model: 'google/gemini-2.0-flash' },
+  custom: { baseUrl: '', model: '' }
+};
+
+function loadAiConfig() {
+  try {
+    const saved = localStorage.getItem('reader-ai-config');
+    if (saved) Object.assign(aiConfig, JSON.parse(saved));
+    // Ensure defaults for selected provider
+    const def = AI_PROVIDER_DEFAULTS[aiConfig.provider];
+    if (def) {
+      if (!aiConfig.baseUrl) aiConfig.baseUrl = def.baseUrl;
+      if (!aiConfig.model) aiConfig.model = def.model;
+    }
+  } catch(e) {}
+}
+
+function saveAiConfig() {
+  try { localStorage.setItem('reader-ai-config', JSON.stringify(aiConfig)); } catch(e) {}
+}
+
+loadAiConfig();
 // Preload PDF.js module (cached for subsequent imports)
 try { import('./lib/pdf.min.mjs').catch(function(){}); } catch(e) {}
 var _pdfjsLib = null;
