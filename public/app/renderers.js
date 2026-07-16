@@ -167,7 +167,8 @@ async function loadFile(source) {
     renderContent();
   }
   showToast(`已打开: ${name}`);
-  dbPut('files', { name: name, content: state.fileContent, type: state.fileType, updatedAt: Date.now() }).catch(() => {});
+  var dbContent = state.fileContent instanceof ArrayBuffer ? state.fileContent.slice(0) : state.fileContent;
+  dbPut('files', { name: name, content: dbContent, type: state.fileType, updatedAt: Date.now() }).catch(() => {});
   updateDocNav();
 }
 

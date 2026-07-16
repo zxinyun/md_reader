@@ -519,6 +519,11 @@ function showAiSummarySheet() {
     const mode = sheet.querySelector('.theme-opt.selected')?.dataset?.mode || 'tlDr';
     // Get content
     let text = '';
+    if (state.fileType === 'img') {
+      statusEl.textContent = '⚠️ 图片内容无法通过 AI 总结，请使用支持视觉的模型';
+      statusEl.style.color = '#e67e22';
+      return;
+    }
     if (state.fileType === 'xlsx') {
       text = document.querySelector('.csv-table-wrap')?.textContent || document.querySelector('.g-sheet')?.textContent || '';
     } else {
@@ -543,7 +548,11 @@ function showAiSummarySheet() {
       statusEl.textContent = '✅ 总结完成';
       statusEl.style.color = '#27ae60';
     } catch(e) {
-      statusEl.textContent = '❌ ' + (e.message || e);
+      var errMsg = e.message || String(e);
+      if (errMsg.includes('image') || errMsg.includes('vision') || errMsg.includes('multimodal')) {
+        errMsg = '当前模型不支持图片/视觉输入，请切换支持 vision 的模型';
+      }
+      statusEl.textContent = '❌ ' + errMsg;
       statusEl.style.color = '#e74c3c';
     }
   });

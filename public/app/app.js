@@ -245,7 +245,8 @@ async function openImportedFile(idx) {
   if (state.fileType === 'pdf' && state.importedFiles.length > 1) { showActionStrip(true); }
   // Save content to IndexedDB for session restore on next app launch
   if (state.fileContent) {
-    dbPut('files', { name: f.name, content: state.fileContent, type: state.fileType, updatedAt: Date.now() }).catch(() => {});
+    var dbContent = state.fileContent instanceof ArrayBuffer ? state.fileContent.slice(0) : state.fileContent;
+    dbPut('files', { name: f.name, content: dbContent, type: state.fileType, updatedAt: Date.now() }).catch(() => {});
   }
   updateDocNav();
   } catch(e) { _d('openImportedFile error: ' + (e && e.message || e)); showToast('打开文件失败: ' + (e && e.message || e)); }
