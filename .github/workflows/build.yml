@@ -234,20 +234,38 @@ jobs:
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "sdk.dir=$ANDROID_HOME" > android/local.properties
           npx cap sync android
 
       - name: Build Android APK
         env:
           GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.parallel=false"
+        shell: bash
         run: |
           cd android
           chmod +x gradlew
           echo "ANDROID_HOME=${ANDROID_HOME}"
           echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}"
           echo "JAVA_HOME=${JAVA_HOME}"
+          echo "=== local.properties ==="
+          cat local.properties 2>/dev/null || echo "(no local.properties)"
+          echo "=== SDK contents ==="
           ls -la $ANDROID_HOME/platforms/ 2>/dev/null || echo "No platforms dir"
           ls -la $ANDROID_HOME/build-tools/ 2>/dev/null || echo "No build-tools dir"
-          ./gradlew assembleDebug --no-daemon --stacktrace --info 2>&1
+          echo "=== Java version ==="
+          java -version 2>&1 || true
+          echo "=== Running Gradle ==="
+          ./gradlew assembleDebug --no-daemon --stacktrace --info 2>&1 | tee /tmp/gradle-build.log
+          exit_code=${PIPESTATUS[0]}
+          echo "GRADLE_EXIT_CODE=$exit_code" >> $GITHUB_ENV
+          exit $exit_code
+
+      - name: Upload Gradle build log (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-build-log
+          path: /tmp/gradle-build.log
 
       - name: Rename APK
         run: |
