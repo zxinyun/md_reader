@@ -196,17 +196,62 @@ jobs:
           java-version: 21
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        run: |
+          # Try pre-installed SDK on runner
+          if [ -d "/usr/local/lib/android/sdk" ]; then
+            SDK="/usr/local/lib/android/sdk"
+          elif [ -n "$ANDROID_HOME" ] && [ -d "$ANDROID_HOME" ]; then
+            SDK="$ANDROID_HOME"
+          else
+            echo "No pre-installed SDK found, installing..."
+            mkdir -p $HOME/android/sdk
+            SDK="$HOME/android/sdk"
+            curl -fsSL -o /tmp/cmdline-tools.zip \
+              https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+            unzip -q /tmp/cmdline-tools.zip -d /tmp/cmdline-tools
+            mkdir -p "$SDK/cmdline-tools"
+            mv /tmp/cmdline-tools/cmdline-tools "$SDK/cmdline-tools/latest"
+          fi
+          echo "ANDROID_HOME=$SDK" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$SDK" >> $GITHUB_ENV
+          echo "Using Android SDK at: $SDK"
 
       - name: Install required SDK platforms
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses --sdk_root=$ANDROID_HOME || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0" --sdk_root=$ANDROID_HOME
-          echo "=== SDK contents ==="
-          ls -la $ANDROID_HOME/platforms/ 2>/dev/null || echo "No platforms dir"
-          ls -la $ANDROID_HOME/build-tools/ 2>/dev/null || echo "No build-tools dir"
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          if [ ! -d "$SDK" ]; then
+            SDK="/usr/local/lib/android/sdk"
+          fi
+          echo "SDK=$SDK"
+          echo "ANDROID_HOME=$SDK" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$SDK" >> $GITHUB_ENV
+
+          # Locate sdkmanager
+          SDKMANAGER=""
+          for p in "$SDK/cmdline-tools/latest/bin/sdkmanager" \
+                    "$SDK/tools/bin/sdkmanager" \
+                    "$SDK/cmdline-tools/*/bin/sdkmanager"; do
+            for f in $p; do
+              if [ -x "$f" ]; then SDKMANAGER="$f"; break 2; fi
+            done
+          done
+
+          if [ -z "$SDKMANAGER" ]; then
+            echo "sdkmanager not found, installing cmdline-tools..."
+            mkdir -p "$SDK/cmdline-tools"
+            curl -fsSL -o /tmp/ct.zip \
+              https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+            unzip -q /tmp/ct.zip -d /tmp/ct
+            mv /tmp/ct/cmdline-tools "$SDK/cmdline-tools/latest"
+            SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          fi
+          echo "sdkmanager=$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses --sdk_root="$SDK" || true
+          "$SDKMANAGER" --install "platforms;android-34" "build-tools;34.0.0" --sdk_root="$SDK"
+          echo "=== SDK platforms ==="
+          ls -la "$SDK/platforms/" 2>/dev/null || echo "No platforms dir"
+          echo "=== build-tools ==="
+          ls -la "$SDK/build-tools/" 2>/dev/null || echo "No build-tools dir"
 
       - name: Install npm deps
         run: npm ci
@@ -258,6 +303,12 @@ jobs:
           ./gradlew assembleDebug --no-daemon --stacktrace --info 2>&1 | tee /tmp/gradle-build.log
           exit_code=${PIPESTATUS[0]}
           echo "GRADLE_EXIT_CODE=$exit_code" >> $GITHUB_ENV
+          if [ $exit_code -ne 0 ]; then
+            echo "## Gradle Build Failed (exit code $exit_code)" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -200 /tmp/gradle-build.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
           exit $exit_code
 
       - name: Upload Gradle build log (on failure)
