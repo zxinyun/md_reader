@@ -72,18 +72,19 @@ jobs:
           node -e '
             var fs = require("fs");
             var V = process.argv[1];
+            var clean = V.replace(/-.*$/, "");
             var tauri = JSON.parse(fs.readFileSync("src-tauri/tauri.conf.json","utf8"));
-            tauri.version = V;
+            tauri.version = clean;
             fs.writeFileSync("src-tauri/tauri.conf.json", JSON.stringify(tauri, null, 2) + "\n");
             var pkg = JSON.parse(fs.readFileSync("package.json","utf8"));
-            pkg.version = V;
+            pkg.version = clean;
             fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
             var cargo = fs.readFileSync("src-tauri/Cargo.toml","utf8");
-            cargo = cargo.replace(/^version = ".*"/m, "version = \"" + V + "\"");
+            cargo = cargo.replace(/^version = ".*"/m, "version = \"" + clean + "\"");
             fs.writeFileSync("src-tauri/Cargo.toml", cargo);
             var cap = JSON.parse(fs.readFileSync("capacitor.config.json","utf8"));
             cap.versionName = V;
-            var p = V.replace(/-.*$/, "").split(".").map(Number);
+            var p = clean.split(".").map(Number);
             cap.versionCode = Math.max(1, (p[0]||0)*10000 + (p[1]||0)*100 + (p[2]||0));
             fs.writeFileSync("capacitor.config.json", JSON.stringify(cap, null, 2) + "\n");
             var g = fs.readFileSync("android/app/build.gradle","utf8");
@@ -166,15 +167,19 @@ jobs:
           node -e '
             var fs = require("fs");
             var V = process.argv[1];
+            var clean = V.replace(/-.*$/, "");
+            var tauri = JSON.parse(fs.readFileSync("src-tauri/tauri.conf.json","utf8"));
+            tauri.version = clean;
+            fs.writeFileSync("src-tauri/tauri.conf.json", JSON.stringify(tauri, null, 2) + "\n");
             var pkg = JSON.parse(fs.readFileSync("package.json","utf8"));
-            pkg.version = V;
+            pkg.version = clean;
             fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
             var cargo = fs.readFileSync("src-tauri/Cargo.toml","utf8");
-            cargo = cargo.replace(/^version = ".*"/m, "version = \"" + V + "\"");
+            cargo = cargo.replace(/^version = ".*"/m, "version = \"" + clean + "\"");
             fs.writeFileSync("src-tauri/Cargo.toml", cargo);
             var cap = JSON.parse(fs.readFileSync("capacitor.config.json","utf8"));
             cap.versionName = V;
-            var p = V.replace(/-.*$/, "").split(".").map(Number);
+            var p = clean.split(".").map(Number);
             cap.versionCode = Math.max(1, (p[0]||0)*10000 + (p[1]||0)*100 + (p[2]||0));
             fs.writeFileSync("capacitor.config.json", JSON.stringify(cap, null, 2) + "\n");
             var g = fs.readFileSync("android/app/build.gradle","utf8");
