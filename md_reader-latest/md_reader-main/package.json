@@ -1,0 +1,48 @@
+{
+  "name": "md-reader",
+  "version": "1.0.8",
+  "private": true,
+  "description": "Universal reader supporting 15+ file formats — MD/HTML/TXT/PDF/Word/Excel/PPT/CSV/Code/Images",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zxinyun/md_reader.git"
+  },
+  "homepage": "https://github.com/zxinyun/md_reader",
+  "bugs": {
+    "url": "https://github.com/zxinyun/md_reader/issues"
+  },
+  "keywords": [
+    "reader",
+    "markdown",
+    "pdf",
+    "office",
+    "cross-platform",
+    "tauri",
+    "capacitor"
+  ],
+  "license": "GPL-3.0",
+  "scripts": {
+    "dev": "npx serve public -l 3000 --no-clipboard --no-request-logging",
+    "tauri": "npx tauri",
+    "tauri:dev": "npx tauri dev",
+    "tauri:build": "npx tauri build",
+    "cap:sync": "npx cap sync",
+    "cap:open:android": "npx cap open android",
+    "cap:open:ios": "npx cap open ios",
+    "cap:build:android": "npx cap sync android && cd android && ./gradlew assembleRelease",
+    "cap:build:ios": "npx cap sync ios && cd ios/App && xcodebuild -workspace App.xcworkspace -scheme App -configuration Release -sdk iphoneos -archivePath $PWD/build/App.xcarchive archive"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.4.1",
+    "@tauri-apps/cli": "^2.0.0"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/core": "^8.4.1",
+    "@capacitor/dialog": "^8.0.1",
+    "@capacitor/filesystem": "^8.1.2",
+    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-dialog": "^2.0.0",
+    "@tauri-apps/plugin-fs": "^2.0.0"
+  }
+}

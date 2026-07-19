@@ -1,0 +1,23 @@
+[package]
+name = "md-reader"
+version = "1.0.8"
+description = "Universal reader supporting 15+ file formats"
+authors = ["zxinyun"]
+repository = "https://github.com/zxinyun/md_reader"
+license = "GPL-3.0"
+edition = "2021"
+
+[lib]
+name = "md_reader_lib"
+crate-type = ["lib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["custom-protocol"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
