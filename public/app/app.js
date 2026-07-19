@@ -1,3 +1,21 @@
+// ===== Tauri HTTP wrapper (bypasses CORS via Rust backend) =====
+async function tauriFetch(input, init) {
+  if (typeof window.__TAURI_INTERNALS__ === 'undefined') {
+    return fetch(input, init);
+  }
+  var url = typeof input === 'string' ? input : input.url;
+  var method = (init && init.method) || (typeof input === 'string' ? 'GET' : input.method || 'GET');
+  var reqHeaders = []; var h = init && init.headers;
+  if (h) {
+    if (typeof h.entries === 'function') { for (var pair of h.entries()) reqHeaders.push(pair); }
+    else if (Array.isArray(h)) { reqHeaders = h; }
+    else { for (var k in h) { if (h.hasOwnProperty(k)) reqHeaders.push([k, h[k]]); } }
+  }
+  var body = init && init.body ? (typeof init.body === 'string' ? init.body : null) : null;
+  var res = await window.__TAURI_INTERNALS__.invoke('http_request', { url: url, method: method, headers: reqHeaders, body: body });
+  return { ok: res.status >= 200 && res.status < 300, status: res.status, statusText: res.status_text, url: url, headers: res.headers, json: async function() { return JSON.parse(res.body); }, text: async function() { return res.body; } };
+}
+
 // ===== Open file(s) via picker =====
 $('openBtn').addEventListener('click', async () => {
   try {

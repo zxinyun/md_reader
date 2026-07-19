@@ -32,7 +32,7 @@ async function openaiChat(messages, cfg) {
     headers['X-Title'] = '通用阅读器';
   }
   if (cfg.apiKey) headers['Authorization'] = 'Bearer ' + cfg.apiKey;
-  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+  const res = await tauriFetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
   if (!res.ok) {
     const err = await res.text().catch(() => '');
     throw new Error('API ' + res.status + ': ' + (err || res.statusText));
@@ -63,7 +63,7 @@ async function geminiChat(messages, cfg) {
     maxOutputTokens: cfg.maxTokens || 4096
   };
 
-  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await tauriFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!res.ok) {
     const err = await res.text().catch(() => '');
     throw new Error('Gemini API ' + res.status + ': ' + (err || res.statusText));
@@ -84,7 +84,7 @@ async function ollamaChat(messages, cfg) {
     },
     stream: false
   };
-  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await tauriFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!res.ok) {
     const err = await res.text().catch(() => '');
     throw new Error('Ollama API ' + res.status + ': ' + (err || res.statusText));
@@ -149,7 +149,7 @@ async function fetchOpenaiModels(cfg) {
     try {
       const headers = {};
       if (cfg.apiKey) headers['Authorization'] = 'Bearer ' + cfg.apiKey;
-      const res = await fetch(url, { headers });
+      const res = await tauriFetch(url, { headers });
       if (!res.ok) { lastErr = new Error('获取模型列表失败 (' + res.status + ')'); continue; }
       const data = await res.json();
       return (data.data || []).map(function(m) { return m.id; }).sort();
@@ -161,7 +161,7 @@ async function fetchOpenaiModels(cfg) {
 async function fetchOllamaModels(cfg) {
   const baseUrl = (cfg.baseUrl || AI_PROVIDER_DEFAULTS.ollama.baseUrl).replace(/\/+$/, '');
   const url = baseUrl + '/api/tags';
-  const res = await fetch(url);
+  const res = await tauriFetch(url);
   if (!res.ok) throw new Error('获取模型列表失败 (' + res.status + ')');
   const data = await res.json();
   return (data.models || []).map(function(m) { return m.name; }).sort();
@@ -172,7 +172,7 @@ async function fetchGeminiModels(cfg) {
   if (!key) throw new Error('请先配置 API Key');
   const baseUrl = (cfg.baseUrl || AI_PROVIDER_DEFAULTS.gemini.baseUrl).replace(/\/+$/, '');
   const url = baseUrl + '/models?key=' + encodeURIComponent(key);
-  const res = await fetch(url);
+  const res = await tauriFetch(url);
   if (!res.ok) throw new Error('获取模型列表失败 (' + res.status + ')');
   const data = await res.json();
   return (data.models || []).map(function(m) { return m.name.replace(/^models\//, ''); }).sort();
