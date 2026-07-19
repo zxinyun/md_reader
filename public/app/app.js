@@ -389,30 +389,13 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// ===== Service Worker cleanup (MUST run before session restore to avoid stale reload) =====
-(function cleanupSW() {
-  if (!('serviceWorker' in navigator)) return;
-  if (window.__TAURI_INTERNALS__) {
-    if (!sessionStorage.getItem('sw_cleaned')) {
-      sessionStorage.setItem('sw_cleaned', '1');
-      navigator.serviceWorker.getRegistrations().then(regs => {
-        regs.forEach(reg => reg.unregister());
-      });
-      if (window.caches) {
-        caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).then(() => {
-          window.location.reload();
-        });
-      } else {
-        window.location.reload();
-      }
-    }
-  } else {
-    navigator.serviceWorker.addEventListener('message', e => {
-      if (e.data && e.data.type === 'SW_UPDATED') window.location.reload();
-    });
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  }
-})();
+// Register service worker for web platform only
+if (!window.__TAURI_INTERNALS__ && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data && e.data.type === 'SW_UPDATED') window.location.reload();
+  });
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
 
 // ===== Handle files opened from external apps (via URL params / Tauri association / platform events) =====
 // Check URL params first — if a file is passed, skip session restore
@@ -445,13 +428,16 @@ let _hasExternalFile = false;
   } catch(e) { showToast('无法解析文件参数'); }
 })();
 
-// Only restore last session when no external file was provided via OS association
+// Defer session restore to not block initial render
 if (!_hasExternalFile) {
-  restoreLastSession().then(() => showRestoreButtonIfAvailable());
+  setTimeout(() => restoreLastSession().then(() => showRestoreButtonIfAvailable()), 50);
 }
 
 // ===== Initial update =====
 updateProgress();
+// Hide splash screen
+var splash = document.getElementById('splash');
+if (splash) { splash.style.opacity = '0'; setTimeout(() => { splash.style.display = 'none'; }, 300); }
 
 // KaTeX CSS for HTML export (full, @font-face stripped - 18KB)
 // Generated from lib/katex-0.16.11.min.css at build time

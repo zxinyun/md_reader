@@ -466,6 +466,7 @@ jobs:
             - 暗色模式 + 会话恢复
             - 完全离线可用
           draft: ${{ github.event_name == 'workflow_dispatch' }}
+          prerelease: ${{ contains(env.APP_VERSION, 'beta') || contains(env.APP_VERSION, 'alpha') || contains(env.APP_VERSION, 'rc') || contains(env.APP_VERSION, 'pre') }}
           files: |
             linux-amd64-bundles/**/*
             linux-arm64-bundles/**/*

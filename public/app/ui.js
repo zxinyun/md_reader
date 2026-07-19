@@ -527,13 +527,10 @@ function showAiSummarySheet() {
     if (state.fileType === 'xlsx') {
       text = document.querySelector('.csv-table-wrap')?.textContent || document.querySelector('.g-sheet')?.textContent || '';
     } else {
-      const body = document.getElementById('readerBody') || document.querySelector('.md-body') || htmlFrame;
-      if (body) {
-        if (body.contentWindow) {
-          try { text = body.contentWindow.document.body.innerText || ''; } catch(e) { text = body.contentDocument?.body?.innerText || ''; }
-        } else {
-          text = body.innerText || '';
-        }
+      const mdBody = document.getElementById('mdContent');
+      text = (mdBody?.innerText || '');
+      if (text === '') {
+        try { text = htmlFrame?.contentWindow?.document?.body?.innerText || htmlFrame?.contentDocument?.body?.innerText || ''; } catch(e) { text = ''; }
       }
     }
     text = text.trim().slice(0, 8000); // Limit length

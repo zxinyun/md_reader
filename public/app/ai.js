@@ -134,13 +134,28 @@ async function fetchModels(cfg) {
 
 async function fetchOpenaiModels(cfg) {
   const baseUrl = (cfg.baseUrl || AI_PROVIDER_DEFAULTS.openai.baseUrl).replace(/\/+$/, '');
-  const url = baseUrl + '/models';
-  const headers = {};
-  if (cfg.apiKey) headers['Authorization'] = 'Bearer ' + cfg.apiKey;
-  const res = await fetch(url, { headers });
-  if (!res.ok) throw new Error('获取模型列表失败 (' + res.status + ')');
-  const data = await res.json();
-  return (data.data || []).map(function(m) { return m.id; }).sort();
+  const candidates = [
+    baseUrl + '/models',
+    baseUrl + '/v1/models'
+  ];
+  // If baseUrl ends with a known path segment like /chat/completions, strip it
+  if (/\/chat\/completions\/?$/.test(baseUrl)) {
+    var stripped = baseUrl.replace(/\/chat\/completions\/?$/, '');
+    candidates.push(stripped + '/models');
+    candidates.push(stripped + '/v1/models');
+  }
+  var lastErr = null;
+  for (const url of candidates) {
+    try {
+      const headers = {};
+      if (cfg.apiKey) headers['Authorization'] = 'Bearer ' + cfg.apiKey;
+      const res = await fetch(url, { headers });
+      if (!res.ok) { lastErr = new Error('获取模型列表失败 (' + res.status + ')'); continue; }
+      const data = await res.json();
+      return (data.data || []).map(function(m) { return m.id; }).sort();
+    } catch(e) { lastErr = e; }
+  }
+  throw lastErr || new Error('无法获取模型列表');
 }
 
 async function fetchOllamaModels(cfg) {
