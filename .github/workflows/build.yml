@@ -306,10 +306,6 @@ jobs:
             echo '```' >> $GITHUB_STEP_SUMMARY
             tail -200 /tmp/gradle-build.log >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
-            # Emit error annotations for visibility
-            tail -80 /tmp/gradle-build.log | grep -iE "(FAILED|ERROR|Exception|Cause|what went wrong|Could not|Cannot|error:|Error)" | head -20 | while IFS= read -r line; do
-              echo "::error::Gradle: ${line:0:500}"
-            done
           fi
           exit $exit_code
 
@@ -319,17 +315,6 @@ jobs:
         with:
           name: gradle-build-log
           path: /tmp/gradle-build.log
-
-      - name: Upload Gradle log to pastebin
-        if: failure()
-        shell: bash
-        run: |
-          URL=$(tail -200 /tmp/gradle-build.log | curl -s --max-time 15 --data-binary @- https://paste.rs/ 2>/dev/null)
-          if [ -n "$URL" ]; then
-            echo "::notice title=Gradle Log::${URL}"
-          else
-            echo "::warning title=Pastebin::upload failed"
-          fi
 
       - name: Rename APK
         run: |
