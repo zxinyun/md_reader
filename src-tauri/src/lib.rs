@@ -42,18 +42,23 @@ fn http_request(url: String, method: Option<String>, headers: Option<Vec<(String
         .timeout_connect(std::time::Duration::from_secs(30))
         .timeout_read(std::time::Duration::from_secs(60))
         .build();
-    let mut req = match method {
+    let req = match method {
         "POST" => agent.post(&url),
         "PUT" => agent.put(&url),
         "DELETE" => agent.delete(&url),
         "PATCH" => agent.patch(&url),
         _ => agent.get(&url),
     };
-    if let Some(hdrs) = headers {
+    // In ureq 2.x, set() returns the Request by value, chain calls are fine
+    let req = if let Some(hdrs) = headers {
+        let mut r = req;
         for (k, v) in hdrs {
-            req = req.set(&k, &v);
+            r = r.set(&k, &v);
         }
-    }
+        r
+    } else {
+        req
+    };
     let res = if let Some(b) = body {
         req.send_string(&b).map_err(|e| format!("请求失败: {}", e))?
     } else {
@@ -61,9 +66,12 @@ fn http_request(url: String, method: Option<String>, headers: Option<Vec<(String
     };
     let status = res.status();
     let status_text = res.status_text().to_string();
-    let response_headers: Vec<(String, String)> = res.headers_names().iter()
-        .map(|n| (n.clone(), res.header(n).unwrap_or("").to_string()))
-        .collect();
+    let mut response_headers: Vec<(String, String)> = Vec::new();
+    for name in &res.headers_names() {
+        if let Some(val) = res.header(name) {
+            response_headers.push((name.clone(), val.to_string()));
+        }
+    }
     let body = res.into_string().map_err(|e| format!("读取响应失败: {}", e))?;
     Ok(HttpResponse { status, status_text, headers: response_headers, body })
 }
