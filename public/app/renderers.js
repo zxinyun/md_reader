@@ -325,7 +325,10 @@ async function renderContent() {
 var _pdfBlobUrl = null;
 
 function renderPdf(buf) {
+  _pdfTextCache = null; // reset cache
   showLoading('正在加载 PDF...');
+  // Background: extract text for AI summary (don't await, cache for later)
+  extractPdfText(buf).then(function(t) { _pdfTextCache = t; }).catch(function(){});
   // Web: use iframe (browser built-in PDF viewer)
   if (typeof FileAPI !== 'undefined' && FileAPI.platform === 'web') {
     if (_pdfBlobUrl) { URL.revokeObjectURL(_pdfBlobUrl); _pdfBlobUrl = null; }
@@ -964,6 +967,40 @@ async function renderPdfWithPdfJs(buf) {
     hideLoading();
     showToast('PDF 加载失败: ' + e.message);
   }
+}
+
+// ===== PDF text extraction for AI summary =====
+var _pdfTextCache = null;
+var _pdfTextPromise = null;
+
+async function extractPdfText(buf) {
+  if (_pdfTextCache !== null) return _pdfTextCache;
+  if (_pdfTextPromise) return _pdfTextPromise;
+  if (!buf || !buf.byteLength) return '';
+  _pdfTextPromise = (async function() {
+    try {
+      var baseUrl = window.location.href.replace(/\/[^/]*$/, '/');
+      if (!_pdfjsLib) {
+        _pdfjsLib = await import(baseUrl + 'lib/pdf.min.mjs');
+        _pdfjsLib.GlobalWorkerOptions.workerSrc = baseUrl + 'lib/pdf.worker.min.mjs';
+      }
+      var loadingTask = _pdfjsLib.getDocument({ data: new Uint8Array(buf) });
+      var pdf = await loadingTask.promise;
+      var texts = [];
+      for (var i = 1; i <= pdf.numPages; i++) {
+        var page = await pdf.getPage(i);
+        var tc = await page.getTextContent();
+        texts.push(tc.items.map(function(item) { return item.str; }).join(' '));
+      }
+      _pdfTextCache = texts.join('\n\n').trim();
+      return _pdfTextCache;
+    } catch(e) {
+      console.warn('PDF text extraction failed:', e);
+      _pdfTextCache = '';
+      return '';
+    }
+  })();
+  return _pdfTextPromise;
 }
 
 // ===== URL browsing =====

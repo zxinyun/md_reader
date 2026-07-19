@@ -346,8 +346,13 @@ function showAiSheet() {
     </div>
     <div class="sheet-group" style="margin-top:8px">
       <div class="sheet-label">模型名称</div>
-      <input class="ai-input" id="aiModel" value="${escapeAttr(aiConfig.model || def?.model || '')}" placeholder="连接后自动获取列表" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text);box-sizing:border-box">
-      <div id="aiModelList" style="margin-top:6px;max-height:180px;overflow-y:auto;display:none;border:1px solid var(--border);border-radius:6px"></div>
+      <div style="display:flex;gap:6px">
+        <input class="ai-input" id="aiModel" value="${escapeAttr(aiConfig.model || def?.model || '')}" placeholder="手动输入或获取列表后选择" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text);box-sizing:border-box">
+        <button id="aiFetchModelsBtn" style="padding:8px 14px;border:none;border-radius:6px;background:var(--primary);color:#fff;cursor:pointer;font-size:13px;white-space:nowrap;flex-shrink:0">获取</button>
+      </div>
+      <select id="aiModelList" style="margin-top:6px;display:none;width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text)">
+        <option value="">选择模型...</option>
+      </select>
     </div>
     <div class="sheet-group" style="margin-top:8px">
       <div class="sheet-label">温度 (0-2, 默认 0.3)</div>
@@ -391,51 +396,40 @@ function showAiSheet() {
   document.querySelectorAll('.ai-input').forEach(inp => {
     inp.addEventListener('input', function() { this.dataset.userEdited = '1'; });
   });
-  // Auto-fetch model list when API URL or Key loses focus
-  function autoFetchModels() {
-    const listEl = document.getElementById('aiModelList');
+  // Manual fetch models button → populate <select> dropdown
+  document.getElementById('aiFetchModelsBtn').addEventListener('click', function() {
+    const selectEl = document.getElementById('aiModelList');
     const modelInput = document.getElementById('aiModel');
     const cfg = collectAiConfig();
-    if (!cfg.baseUrl) return;
-    listEl.style.display = 'block';
-    listEl.innerHTML = '<div style="padding:10px;text-align:center;font-size:12px;color:var(--text-secondary)">⏳ 获取模型列表...</div>';
+    if (!cfg.baseUrl) { selectEl.style.display = 'none'; return; }
+    selectEl.style.display = 'block';
+    selectEl.innerHTML = '<option value="">⏳ 获取中...</option>';
+    selectEl.disabled = true;
     fetchModels(cfg).then(function(models) {
-      if (!models || models.length === 0) { listEl.innerHTML = '<div style="padding:10px;text-align:center;font-size:12px;color:var(--text-secondary)">暂无可用模型，请手动输入</div>'; return; }
+      selectEl.disabled = false;
+      if (!models || models.length === 0) {
+        selectEl.innerHTML = '<option value="">暂无可用模型</option>';
+        return;
+      }
       var currentModel = modelInput.value;
-      listEl.innerHTML = '<div style="padding:4px 8px;font-size:11px;color:var(--text-secondary);border-bottom:1px solid var(--border)">选择模型 (共 ' + models.length + ' 个)</div>' +
+      selectEl.innerHTML = '<option value="">选择模型 (' + models.length + ' 个)</option>' +
         models.map(function(m) {
-          var sel = m === currentModel ? ' background:var(--primary-light);font-weight:600' : '';
-          return '<div class="ai-model-item" data-model="' + escapeAttr(m) + '" style="padding:7px 10px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s' + sel + '">' + escapeHtml(m) + '</div>';
+          var sel = m === currentModel ? ' selected' : '';
+          return '<option value="' + escapeAttr(m) + '"' + sel + '>' + escapeHtml(m) + '</option>';
         }).join('');
-      listEl.querySelectorAll('.ai-model-item').forEach(function(item) {
-        item.addEventListener('click', function() {
-          modelInput.value = this.dataset.model;
-          modelInput.dataset.userEdited = '1';
-          modelInput.focus();
-          listEl.style.display = 'none';
-        });
-        item.addEventListener('mouseenter', function() { this.style.background = 'var(--hover-bg, var(--primary-light))'; });
-        item.addEventListener('mouseleave', function() { this.style.background = ''; });
-      });
     }).catch(function(e) {
-      listEl.innerHTML = '<div style="padding:10px;text-align:center;font-size:12px;color:var(--text-secondary)">⚠️ 未能自动获取 (' + escapeHtml(e.message || e) + ')<br>请在输入框中手动填写模型名称</div>';
+      selectEl.disabled = false;
+      selectEl.innerHTML = '<option value="">⚠️ 获取失败: ' + escapeHtml(e.message || e) + '</option>';
     });
-  }
-  var debounceTimer = null;
-  function debounceFetch() {
-    if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(autoFetchModels, 400);
-  }
-  document.getElementById('aiBaseUrl').addEventListener('blur', function() {
-    if (this.value.trim()) debounceFetch();
   });
-  document.getElementById('aiApiKey').addEventListener('blur', function() {
-    if (document.getElementById('aiBaseUrl').value.trim() && this.value.trim()) debounceFetch();
+  // Model select change → fill input
+  document.getElementById('aiModelList').addEventListener('change', function() {
+    var val = this.value;
+    if (val) {
+      document.getElementById('aiModel').value = val;
+      document.getElementById('aiModel').dataset.userEdited = '1';
+    }
   });
-  // If already configured, auto-fetch on open
-  if (aiConfig.baseUrl && aiConfig.apiKey) {
-    setTimeout(autoFetchModels, 500);
-  }
   // Test connection
   document.getElementById('aiTestBtn').addEventListener('click', async () => {
     const statusEl = document.getElementById('aiStatus');
@@ -524,7 +518,18 @@ function showAiSummarySheet() {
       statusEl.style.color = '#e67e22';
       return;
     }
-    if (state.fileType === 'xlsx') {
+    if (state.fileType === 'pdf') {
+      if (typeof _pdfTextCache !== 'undefined' && _pdfTextCache) {
+        text = _pdfTextCache.slice(0, 8000);
+      } else if (typeof extractPdfText === 'function') {
+        statusEl.textContent = '⏳ 正在提取PDF文本...';
+        statusEl.style.color = 'var(--text-secondary)';
+        try {
+          var pdfText = await extractPdfText(state.fileContent);
+          text = pdfText.slice(0, 8000);
+        } catch(e) { text = ''; }
+      }
+    } else if (state.fileType === 'xlsx') {
       text = document.querySelector('.csv-table-wrap')?.textContent || document.querySelector('.g-sheet')?.textContent || '';
     } else {
       const mdBody = document.getElementById('mdContent');
