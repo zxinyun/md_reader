@@ -320,30 +320,16 @@ jobs:
           name: gradle-build-log
           path: /tmp/gradle-build.log
 
-      - name: Report Gradle errors
+      - name: Upload Gradle log to pastebin
         if: failure()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const log = fs.readFileSync('/tmp/gradle-build.log', 'utf8');
-            const errorLines = log.split('\n')
-              .filter(l => /FAILED|BUILD FAILED|Exception|A problem occurred|What went wrong|error:|Cannot|Could not|unsupported|Unsupported/i.test(l))
-              .slice(-20)
-              .join('\n');
-            const summary = errorLines || 'Gradle build failed. See uploaded artifact "gradle-build-log" for full output.';
-            await github.rest.checks.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              name: 'Gradle Error Report',
-              head_sha: context.sha,
-              status: 'completed',
-              conclusion: 'neutral',
-              output: {
-                title: 'Gradle Build Errors',
-                summary: summary.substring(0, 65535)
-              }
-            });
+        shell: bash
+        run: |
+          URL=$(tail -200 /tmp/gradle-build.log | curl -s --max-time 15 --data-binary @- https://paste.rs/ 2>/dev/null)
+          if [ -n "$URL" ]; then
+            echo "::notice title=Gradle Log::${URL}"
+          else
+            echo "::warning title=Pastebin::upload failed"
+          fi
 
       - name: Rename APK
         run: |
