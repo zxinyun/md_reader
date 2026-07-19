@@ -347,7 +347,7 @@ function showAiSheet() {
     <div class="sheet-group" style="margin-top:8px">
       <div class="sheet-label">模型名称</div>
       <div style="display:flex;gap:6px">
-        <input class="ai-input" id="aiModel" value="${escapeAttr(aiConfig.model || def?.model || '')}" placeholder="手动输入或获取列表后选择" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text);box-sizing:border-box">
+        <input class="ai-input" id="aiModel" value="${escapeAttr(isCustom ? (aiConfig.model || '') : (def?.model || aiConfig.model || ''))}" placeholder="手动输入或获取列表后选择" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text);box-sizing:border-box">
         <button id="aiFetchModelsBtn" style="padding:8px 14px;border:none;border-radius:6px;background:var(--primary);color:#fff;cursor:pointer;font-size:13px;white-space:nowrap;flex-shrink:0">获取</button>
       </div>
       <select id="aiModelList" style="margin-top:6px;display:none;width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text)">
@@ -384,12 +384,13 @@ function showAiSheet() {
       const modelInput = document.getElementById('aiModel');
       if (baseUrlInput) baseUrlInput.placeholder = isCustom ? 'https://api.example.com/v1' : '例如 ' + (AI_PROVIDER_DEFAULTS[p]?.baseUrl || 'https://api.openai.com/v1');
       if (modelInput) modelInput.placeholder = isCustom ? '例如: deepseek-chat / Qwen/Qwen2.5-7B' : '例如 ' + (AI_PROVIDER_DEFAULTS[p]?.model || 'gpt-4o-mini');
-      // Fill defaults only if user hasn't edited
+      // Reset userEdited flag and fill provider defaults on switch
       const d = AI_PROVIDER_DEFAULTS[p];
-      if (d) {
-        if (baseUrlInput && !baseUrlInput.dataset.userEdited) { baseUrlInput.value = d.baseUrl; }
-        if (modelInput && !modelInput.dataset.userEdited) { modelInput.value = d.model; }
-      }
+      if (baseUrlInput) { baseUrlInput.dataset.userEdited = ''; if (d) baseUrlInput.value = d.baseUrl || ''; }
+      if (modelInput) { modelInput.dataset.userEdited = ''; if (d) modelInput.value = d.model || ''; }
+      // Hide previous model list
+      var prevList = document.getElementById('aiModelList');
+      if (prevList) prevList.style.display = 'none';
     });
   });
   // Mark inputs as user-edited
@@ -400,8 +401,15 @@ function showAiSheet() {
   document.getElementById('aiFetchModelsBtn').addEventListener('click', function() {
     const selectEl = document.getElementById('aiModelList');
     const modelInput = document.getElementById('aiModel');
+    const statusEl = document.getElementById('aiStatus');
     const cfg = collectAiConfig();
     if (!cfg.baseUrl) { selectEl.style.display = 'none'; return; }
+    // Require API key for providers that need one (skip Ollama)
+    if (cfg.provider !== 'ollama' && !cfg.apiKey) {
+      if (statusEl) { statusEl.textContent = '⚠️ 请先填写 API Key'; statusEl.style.color = '#e67e22'; }
+      selectEl.style.display = 'none';
+      return;
+    }
     selectEl.style.display = 'block';
     selectEl.innerHTML = '<option value="">⏳ 获取中...</option>';
     selectEl.disabled = true;
