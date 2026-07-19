@@ -247,7 +247,7 @@ jobs:
           fi
           echo "sdkmanager=$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses --sdk_root="$SDK" || true
-          "$SDKMANAGER" --install "platforms;android-34" "build-tools;34.0.0" --sdk_root="$SDK"
+          "$SDKMANAGER" --install "platforms;android-36" "build-tools;36.0.0" --sdk_root="$SDK"
           echo "=== SDK platforms ==="
           ls -la "$SDK/platforms/" 2>/dev/null || echo "No platforms dir"
           echo "=== build-tools ==="
