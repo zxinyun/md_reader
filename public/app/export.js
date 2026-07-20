@@ -406,22 +406,30 @@ async function exportAsImage(mode) {
   }
 }
 
+// ===== Check if current file type supports text export =====
+function isTextExportable() {
+  return !(state.fileType === 'pdf' || state.fileType === 'img');
+}
+
 // ===== Save Sheet =====
 function showSaveSheet() {
   const isTable = state.fileType === 'xlsx' || state.fileType === 'csv' || state.fileType === 'xls' || state.fileType === 'et';
   const csvBtn = isTable ? `<button class="theme-opt save-opt" data-ext=".csv" data-mime="text/csv">📊 CSV</button>` : '';
+  // Disable text-based save options for non-text-exportable files
+  const textDisabled = isTextExportable() ? '' : ' opacity:0.5;pointer-events:none';
+  const textTitle = isTextExportable() ? '' : ' title="当前文件类型不支持导出为文本格式"';
   const html = `
     <div class="sheet-handle"></div>
     <div class="sheet-title">💾 另存为</div>
     <div class="sheet-group">
       <div class="sheet-label">文档格式</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
-        <button class="theme-opt save-opt" data-ext=".txt" data-mime="text/plain">📄 纯文本</button>
-        <button class="theme-opt save-opt" data-ext=".md" data-mime="text/markdown">📝 Markdown</button>
-        <button class="theme-opt save-opt" data-ext=".html" data-mime="text/html">🌐 HTML</button>
+        <button class="theme-opt save-opt" data-ext=".txt" data-mime="text/plain"${textDisabled}${textTitle}>📄 纯文本</button>
+        <button class="theme-opt save-opt" data-ext=".md" data-mime="text/markdown"${textDisabled}${textTitle}>📝 Markdown</button>
+        <button class="theme-opt save-opt" data-ext=".html" data-mime="text/html"${textDisabled}${textTitle}>🌐 HTML</button>
         ${csvBtn}
-        <button class="theme-opt save-opt" data-ext=".doc" data-mime="application/msword">📘 Word</button>
-        <button class="theme-opt save-opt" data-ext=".docx" data-mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document">📗 Word (.docx)</button>
+        <button class="theme-opt save-opt" data-ext=".doc" data-mime="application/msword"${textDisabled}${textTitle}>📘 Word</button>
+        <button class="theme-opt save-opt" data-ext=".docx" data-mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"${textDisabled}${textTitle}>📗 Word (.docx)</button>
       </div>
     </div>
     <div class="sheet-group">
@@ -437,8 +445,12 @@ function showSaveSheet() {
   setTimeout(() => {
     document.querySelectorAll('.save-opt').forEach(btn => {
       btn.addEventListener('click', async () => {
-        closeSheet();
         const ext = btn.dataset.ext;
+        if (ext && !isTextExportable()) {
+          showToast('⚠️ 当前文件类型不支持导出为文本格式，请使用 PNG/SVG 截图');
+          return;
+        }
+        closeSheet();
         const mime = btn.dataset.mime;
         if (ext === '.docx') {
           showToast('正在生成 DOCX...');
@@ -461,6 +473,10 @@ function showSaveSheet() {
           }).catch(e => showToast('Word 生成失败: ' + (e.message || '')));
           return;
         }
+        if (ext === '.csv' && !isTable) {
+          showToast('⚠️ 当前文件类型不支持导出 CSV');
+          return;
+        }
         let content = getOriginalContent();
         if (!content) { showToast('没有可保存的内容'); return; }
         if (ext === '.html') content = await getContentAsHtml();
@@ -470,7 +486,21 @@ function showSaveSheet() {
       });
     });
     document.querySelectorAll('.img-export').forEach(btn => {
-      btn.addEventListener('click', () => { closeSheet(); exportAsImage(btn.dataset.mode); });
+      btn.addEventListener('click', () => {
+        const mode = btn.dataset.mode;
+        // PDF print mode: not supported for binary-only file types
+        if (mode === 'pdf' && !isTextExportable() && state.fileType !== 'img') {
+          showToast('⚠️ PDF 打印不支持当前文件类型');
+          return;
+        }
+        // Section export requires headings (not available for img/pdf)
+        if (mode === 'sections' && !isTextExportable()) {
+          showToast('⚠️ 分段截图不支持当前文件类型');
+          return;
+        }
+        closeSheet();
+        exportAsImage(btn.dataset.mode);
+      });
     });
   }, 50);
 }
