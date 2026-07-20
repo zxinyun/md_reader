@@ -513,15 +513,12 @@ function showSaveSheet() {
         const mime = btn.dataset.mime;
         if (ext === '.docx') {
           showToast('正在生成 DOCX...');
-          getContentAsDocx().then(blob => {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = (state.fileName || 'untitled').replace(/\.[^.]+$/, '') + '.docx';
-            document.body.appendChild(a); a.click(); document.body.removeChild(a);
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-            showToast(`已保存为 ${a.download}`);
-          }).catch(e => showToast('DOCX 生成失败: ' + (e.message || '')));
+          try {
+            const blob = await getContentAsDocx();
+            const finalName = (state.fileName || 'untitled').replace(/\.[^.]+$/, '') + '.docx';
+            await FileAPI.saveFile(blob, finalName, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+            showToast(`已保存为 ${finalName}`);
+          } catch(e) { showToast('DOCX 生成失败: ' + (e.message || '')); }
           return;
         }
         if (ext === '.doc') {

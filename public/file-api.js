@@ -220,12 +220,17 @@
       if (!content) return;
       mime = mime || 'text/plain';
       if (platform === 'tauri') {
+        var ext = (filename.match(/\.(\w+)$/) || [])[1] || '*';
         var savePath = await tauriCmd('plugin:dialog|save', {
-          options: { defaultPath: filename }
+          defaultPath: filename,
+          filters: [{ name: '文件', extensions: [ext] }]
         });
         if (!savePath) return;
         if (typeof content === 'string') {
           await tauriCmd('plugin:fs|write_text_file', { path: savePath, contents: content });
+        } else if (content instanceof Blob) {
+          var buf = await content.arrayBuffer();
+          await tauriCmd('plugin:fs|write_file', { path: savePath, contents: Array.from(new Uint8Array(buf)) });
         } else {
           await tauriCmd('plugin:fs|write_file', { path: savePath, contents: Array.from(content) });
         }
