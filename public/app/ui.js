@@ -502,6 +502,10 @@ function showAiSummarySheet() {
       <button id="aiSummaryClose" style="flex:1;padding:10px;border:none;border-radius:6px;background:var(--bg-secondary);color:var(--text-secondary);cursor:pointer;font-size:14px">取消</button>
     </div>
     <div id="aiSummaryResult" style="margin-top:12px;padding:12px;background:var(--bg);border-radius:var(--radius-sm);font-size:14px;line-height:1.6;white-space:pre-wrap;max-height:50vh;overflow-y:auto;display:none"></div>
+    <div id="aiSummaryActions" style="margin-top:8px;display:none;gap:8px;justify-content:flex-end">
+      <button id="aiSummaryCopy" style="padding:6px 14px;border:1px solid var(--border);border-radius:6px;background:var(--bg-card);color:var(--text);cursor:pointer;font-size:13px">📋 复制</button>
+      <button id="aiSummarySave" style="padding:6px 14px;border:none;border-radius:6px;background:var(--primary);color:#fff;cursor:pointer;font-size:13px">💾 保存</button>
+    </div>
     <div id="aiSummaryStatus" style="margin-top:8px;font-size:12px;color:var(--text-secondary);text-align:center"></div>
   `;
   openSheet(html);
@@ -514,6 +518,27 @@ function showAiSummarySheet() {
   });
   // Close
   document.getElementById('aiSummaryClose').addEventListener('click', closeSheet);
+  // Copy summary
+  document.getElementById('aiSummaryCopy').addEventListener('click', function() {
+    var txt = document.getElementById('aiSummaryResult').textContent;
+    if (!txt) return;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(txt).then(function() { showToast('已复制到剪贴板'); }).catch(function(){});
+    } else {
+      var ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+      showToast('已复制到剪贴板');
+    }
+  });
+  // Save summary as file
+  document.getElementById('aiSummarySave').addEventListener('click', function() {
+    var txt = document.getElementById('aiSummaryResult').textContent;
+    if (!txt) return;
+    var blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a'); a.href = url; a.download = 'AI总结_' + new Date().toISOString().slice(0,10) + '.txt'; a.click();
+    URL.revokeObjectURL(url);
+    showToast('已保存文件');
+  });
   // Run
   document.getElementById('aiSummaryGo').addEventListener('click', async () => {
     const resultEl = document.getElementById('aiSummaryResult');
@@ -555,6 +580,9 @@ function showAiSummarySheet() {
       const summary = await summarizeText(text, mode);
       resultEl.textContent = summary;
       resultEl.style.display = 'block';
+      // Show copy & save buttons
+      var actionsEl = document.getElementById('aiSummaryActions');
+      if (actionsEl) { actionsEl.style.display = 'flex'; }
       statusEl.textContent = '✅ 总结完成';
       statusEl.style.color = '#27ae60';
     } catch(e) {

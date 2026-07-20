@@ -327,8 +327,8 @@ var _pdfBlobUrl = null;
 function renderPdf(buf) {
   _pdfTextCache = null; // reset cache
   showLoading('正在加载 PDF...');
-  // Background: extract text for AI summary (don't await, cache for later)
-  extractPdfText(buf).then(function(t) { _pdfTextCache = t; }).catch(function(){});
+  // Background: extract text for AI summary (use a copy of buf to avoid detaching the original)
+  extractPdfText(buf.slice(0)).then(function(t) { _pdfTextCache = t; }).catch(function(){});
   // Web: use iframe (browser built-in PDF viewer)
   if (typeof FileAPI !== 'undefined' && FileAPI.platform === 'web') {
     if (_pdfBlobUrl) { URL.revokeObjectURL(_pdfBlobUrl); _pdfBlobUrl = null; }
