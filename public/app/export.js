@@ -374,7 +374,19 @@ async function exportAsImage(mode) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     showToast(`已导出 ${sections.length} 张分段截图`);
   } else if (mode === 'pdf') {
-    // Export as PDF via hidden iframe + print
+    // For PDF displayed in iframe (web): use browser native PDF print
+    if (state.fileType === 'pdf' && htmlFrame.style.display !== 'none' && htmlFrame.contentWindow) {
+      try { htmlFrame.contentWindow.print(); } catch(e) { showToast('打印失败'); }
+      showToast('请在打印对话框中选择"另存为 PDF"');
+      return;
+    }
+    // For non-text-exportable files (PDF on mobile, images): print current view directly
+    if (!isTextExportable()) {
+      try { window.print(); } catch(e) { showToast('打印失败'); }
+      showToast('请在打印对话框中选择"另存为 PDF"');
+      return;
+    }
+    // Export as PDF via hidden iframe + print (for text-based content)
     var content = '';
     if (state.fileType === 'html' && htmlFrame.style.display !== 'none') {
       try {
@@ -384,7 +396,6 @@ async function exportAsImage(mode) {
     } else {
       content = target.innerHTML;
     }
-    // Collect stylesheets and set base URL for relative paths (KaTeX fonts)
     var baseUrl = window.location.href.replace(/[/][^/]*$/, '/');
     var styles = '<base href="' + baseUrl + '">\n';
     styles += Array.from(document.querySelectorAll('style, link[rel="stylesheet"]')).map(function(el) { return el.outerHTML; }).join('\n');
@@ -488,11 +499,6 @@ function showSaveSheet() {
     document.querySelectorAll('.img-export').forEach(btn => {
       btn.addEventListener('click', () => {
         const mode = btn.dataset.mode;
-        // PDF print mode: not supported for binary-only file types
-        if (mode === 'pdf' && !isTextExportable() && state.fileType !== 'img') {
-          showToast('⚠️ PDF 打印不支持当前文件类型');
-          return;
-        }
         // Section export requires headings (not available for img/pdf)
         if (mode === 'sections' && !isTextExportable()) {
           showToast('⚠️ 分段截图不支持当前文件类型');
