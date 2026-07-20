@@ -374,14 +374,55 @@ async function exportAsImage(mode) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     showToast(`已导出 ${sections.length} 张分段截图`);
   } else if (mode === 'pdf') {
-    // For PDF displayed in iframe (web): use browser native PDF print
+    // PDF in iframe (web): use browser native PDF print
     if (state.fileType === 'pdf' && htmlFrame.style.display !== 'none' && htmlFrame.contentWindow) {
       try { htmlFrame.contentWindow.print(); } catch(e) { showToast('打印失败'); }
       showToast('请在打印对话框中选择"另存为 PDF"');
       return;
     }
-    // For non-text-exportable files (PDF on mobile, images): print current view directly
-    if (!isTextExportable()) {
+    // Canvas-based PDF (tauri/capacitor): screenshot the viewer and print as image
+    if (state.fileType === 'pdf') {
+      var pdfWrapper = document.getElementById('pdfViewerWrapper');
+      if (pdfWrapper) {
+        await ensureHtml2Canvas();
+        showToast('正在生成打印内容...');
+        // Clone the wrapper, strip toolbar, keep only the pages
+        var printWrapper = pdfWrapper.cloneNode(true);
+        // Remove toolbar elements
+        var toolbarClone = printWrapper.querySelector('[style*="flex-shrink:0;background:var(--bg-card)"]');
+        if (toolbarClone) toolbarClone.remove();
+        var thumbPanelClone = printWrapper.querySelector('#pdfThumbPanel');
+        if (thumbPanelClone) thumbPanelClone.remove();
+        // Style for clean printing
+        printWrapper.style.cssText = 'background:#fff;padding:0;margin:0';
+        printWrapper.querySelector('[style*="flex:1;overflow-x:auto"]').style.cssText = 'overflow:visible;padding:0';
+        // Temporarily attach to capture
+        var captureContainer = document.createElement('div');
+        captureContainer.style.cssText = 'position:fixed;left:-9999px;top:0;z-index:-1;background:#fff';
+        captureContainer.appendChild(printWrapper);
+        document.body.appendChild(captureContainer);
+        var capCanvas = await html2canvas(printWrapper, { useCORS: true, scale: 2, backgroundColor: '#ffffff', logging: false, allowTaint: false });
+        document.body.removeChild(captureContainer);
+        var imgData = capCanvas.toDataURL('image/png');
+        var printIframe = document.createElement('iframe');
+        printIframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;height:600px;border:none;';
+        document.body.appendChild(printIframe);
+        var iDoc = printIframe.contentDocument || printIframe.contentWindow.document;
+        iDoc.open();
+        iDoc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + escapeHtml(state.fileName) + '</title><style>body{margin:0;display:flex;flex-direction:column;align-items:center}img{max-width:100%;height:auto;page-break-after:always}</style></head><body><img src="' + imgData + '" style="width:100%"></body></html>');
+        iDoc.close();
+        printIframe.onload = function() {
+          setTimeout(function() {
+            try { printIframe.contentWindow.print(); } catch(e) { showToast('打印失败'); }
+            setTimeout(function() { document.body.removeChild(printIframe); }, 1000);
+          }, 800);
+        };
+        showToast('请在打印对话框中选择"另存为 PDF"');
+        return;
+      }
+    }
+    // Images: print current view directly (no UI chrome to worry about)
+    if (state.fileType === 'img') {
       try { window.print(); } catch(e) { showToast('打印失败'); }
       showToast('请在打印对话框中选择"另存为 PDF"');
       return;
