@@ -380,45 +380,52 @@ async function exportAsImage(mode) {
       showToast('请在打印对话框中选择"另存为 PDF"');
       return;
     }
-    // Canvas-based PDF (tauri/capacitor): screenshot the viewer and print as image
+    // Canvas-based PDF (tauri/capacitor): render all pages via pdf.js and print page by page
     if (state.fileType === 'pdf') {
-      var pdfWrapper = document.getElementById('pdfViewerWrapper');
-      if (pdfWrapper) {
-        await ensureHtml2Canvas();
+      if (typeof _pdfjsLib === 'undefined' && typeof _pdfTextPromise !== 'undefined') {
+        // Wait for pdf.js to finish loading (triggered by extractPdfText)
+        try { await _pdfTextPromise; } catch(e) {}
+      }
+      if (typeof _pdfjsLib !== 'undefined' && state.fileContent && state.fileContent.byteLength) {
         showToast('正在生成打印内容...');
-        // Clone the wrapper, strip toolbar, keep only the pages
-        var printWrapper = pdfWrapper.cloneNode(true);
-        // Remove toolbar elements
-        var toolbarClone = printWrapper.querySelector('[style*="flex-shrink:0;background:var(--bg-card)"]');
-        if (toolbarClone) toolbarClone.remove();
-        var thumbPanelClone = printWrapper.querySelector('#pdfThumbPanel');
-        if (thumbPanelClone) thumbPanelClone.remove();
-        // Style for clean printing
-        printWrapper.style.cssText = 'background:#fff;padding:0;margin:0';
-        printWrapper.querySelector('[style*="flex:1;overflow-x:auto"]').style.cssText = 'overflow:visible;padding:0';
-        // Temporarily attach to capture
-        var captureContainer = document.createElement('div');
-        captureContainer.style.cssText = 'position:fixed;left:-9999px;top:0;z-index:-1;background:#fff';
-        captureContainer.appendChild(printWrapper);
-        document.body.appendChild(captureContainer);
-        var capCanvas = await html2canvas(printWrapper, { useCORS: true, scale: 2, backgroundColor: '#ffffff', logging: false, allowTaint: false });
-        document.body.removeChild(captureContainer);
-        var imgData = capCanvas.toDataURL('image/png');
-        var printIframe = document.createElement('iframe');
-        printIframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;height:600px;border:none;';
-        document.body.appendChild(printIframe);
-        var iDoc = printIframe.contentDocument || printIframe.contentWindow.document;
-        iDoc.open();
-        iDoc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + escapeHtml(state.fileName) + '</title><style>body{margin:0;display:flex;flex-direction:column;align-items:center}img{max-width:100%;height:auto;page-break-after:always}</style></head><body><img src="' + imgData + '" style="width:100%"></body></html>');
-        iDoc.close();
-        printIframe.onload = function() {
-          setTimeout(function() {
-            try { printIframe.contentWindow.print(); } catch(e) { showToast('打印失败'); }
-            setTimeout(function() { document.body.removeChild(printIframe); }, 1000);
-          }, 800);
-        };
-        showToast('请在打印对话框中选择"另存为 PDF"');
-        return;
+        try {
+          var _buf = state.fileContent.slice(0);
+          var _loadingTask = _pdfjsLib.getDocument({ data: new Uint8Array(_buf) });
+          var _pdf = await _loadingTask.promise;
+          var _totalPages = _pdf.numPages;
+          var _printScale = 2; // 2x for print resolution
+          var _pagesHtml = '';
+          for (var _pi = 1; _pi <= _totalPages; _pi++) {
+            var _page = await _pdf.getPage(_pi);
+            var _vp = _page.getViewport({ scale: _printScale });
+            var _c = document.createElement('canvas');
+            _c.width = _vp.width;
+            _c.height = _vp.height;
+            var _ctx = _c.getContext('2d');
+            _ctx.fillStyle = '#fff';
+            _ctx.fillRect(0, 0, _vp.width, _vp.height);
+            await _page.render({ canvasContext: _ctx, viewport: _vp }).promise;
+            _pagesHtml += '<img src="' + _c.toDataURL('image/png') + '" style="width:100%;height:auto;display:block;page-break-after:always" />';
+          }
+          var _printIframe = document.createElement('iframe');
+          _printIframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;height:600px;border:none;';
+          document.body.appendChild(_printIframe);
+          var _iDoc = _printIframe.contentDocument || _printIframe.contentWindow.document;
+          _iDoc.open();
+          _iDoc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + escapeHtml(state.fileName) + '</title><style>body{margin:0;padding:0;background:#fff}img{page-break-after:always;max-width:100%;height:auto;display:block}</style></head><body>' + _pagesHtml + '</body></html>');
+          _iDoc.close();
+          _printIframe.onload = function() {
+            setTimeout(function() {
+              try { _printIframe.contentWindow.print(); } catch(e) { showToast('打印失败'); }
+              setTimeout(function() { document.body.removeChild(_printIframe); }, 1000);
+            }, 800);
+          };
+          showToast('请在打印对话框中选择"另存为 PDF"');
+          return;
+        } catch(e) {
+          showToast('PDF 打印生成失败: ' + (e.message || ''));
+          return;
+        }
       }
     }
     // Images: print current view directly (no UI chrome to worry about)
