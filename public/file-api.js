@@ -222,8 +222,10 @@
       if (platform === 'tauri') {
         var ext = (filename.match(/\.(\w+)$/) || [])[1] || '*';
         var savePath = await tauriCmd('plugin:dialog|save', {
-          defaultPath: filename,
-          filters: [{ name: '文件', extensions: [ext] }]
+          options: {
+            defaultPath: filename,
+            filters: [{ name: '文件', extensions: [ext] }]
+          }
         });
         if (!savePath) return;
         if (typeof content === 'string') {
